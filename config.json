@@ -1,0 +1,17 @@
+{
+  "schedule": {
+    "enabled": false,
+    "interval": "weekly",
+    "last_updated": "2026-05-01T02:49:55.330661"
+  },
+  "crawlers": {
+    "NVIDIA": true,
+    "Google": true,
+    "Anthropic": true,
+    "OpenAI": true,
+    "Samsung": true,
+    "Naver": true,
+    "Toss": true,
+    "Upstage": true
+  }
+}

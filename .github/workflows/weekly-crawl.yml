@@ -1,0 +1,44 @@
+name: Weekly Auto Crawl
+
+on:
+  schedule:
+    - cron: "0 0 * * 1" # 매주 월요일 09:00 KST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check if schedule is enabled
+        id: check
+        run: |
+          ENABLED=$(python -c "import json; print(json.load(open('config.json'))['schedule']['enabled'])")
+          echo "enabled=$ENABLED" >> $GITHUB_OUTPUT
+          echo "Schedule enabled: $ENABLED"
+
+      - uses: actions/setup-python@v5
+        if: steps.check.outputs.enabled == 'True'
+        with:
+          python-version: "3.11"
+
+      - name: Install
+        if: steps.check.outputs.enabled == 'True'
+        run: pip install -r requirements.txt
+
+      - name: Run crawler
+        if: steps.check.outputs.enabled == 'True'
+        run: python main.py
+
+      - name: Commit results
+        if: steps.check.outputs.enabled == 'True'
+        run: |
+          git config user.name "github-actions"
+          git config user.email "actions@github.com"
+          git add docs/data/jobs.json config.json
+          git diff --staged --quiet || git commit -m "🔄 Weekly crawl $(date +'%Y-%m-%d')"
+          git push

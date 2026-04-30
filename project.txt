@@ -1,0 +1,28 @@
+job-crawler/
+├── .github/
+│   └── workflows/
+│       └── weekly-crawl.yml       # 자동 크롤링 (선택적 활성화)
+├── crawlers/
+│   ├── __init__.py
+│   ├── base.py
+│   ├── nvidia.py
+│   ├── google.py
+│   ├── samsung.py
+│   ├── naver.py
+│   ├── toss.py
+│   ├── generic_greenhouse.py
+│   └── generic_lever.py
+├── docs/
+│   ├── index.html
+│   ├── style.css
+│   ├── app.js
+│   └── data/
+│       └── jobs.json
+├── config.json                    # 크롤링 설정
+├── main.py                        # 수동 크롤링 실행
+├── server.py                      # 로컬 웹 서버
+├── toggle_schedule.py             # 자동 크롤링 ON/OFF
+├── requirements.txt
+├── .env.example
+├── .gitignore
+└── README.md

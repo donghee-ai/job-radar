@@ -1,0 +1,21 @@
+# 환경 변수
+.env
+.env.local
+.env.*.local
+
+# 크롤링 결과 (선택)
+docs/data/jobs.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+.DS_Store
+
+# 로그
+*.log
