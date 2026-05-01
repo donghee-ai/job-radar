@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Dict
 import requests
 
@@ -20,9 +20,11 @@ class BaseCrawler(ABC):
 
     def format_job(self, title: str, url: str, location: str = "",
                    department: str = "", posted_date: str = "") -> Dict:
+        from .classifier import classify_role
         return {
             "company": self.company,
             "category": self.category,
+            "role": classify_role(title),
             "title": title,
             "url": url,
             "location": location,
@@ -30,6 +32,14 @@ class BaseCrawler(ABC):
             "posted_date": posted_date,
             "crawled_at": datetime.now().isoformat()
         }
+
+    def is_expired(self, end_date_str: str, fmt: str = "%Y%m%d") -> bool:
+        """end_date_str 을 fmt 형식으로 파싱해 오늘보다 이전이면 True 반환.
+        파싱 실패 시 False (마감일 불명확 → 유지)."""
+        try:
+            return datetime.strptime(end_date_str, fmt).date() < date.today()
+        except (ValueError, TypeError):
+            return False
 
     def safe_request(self, url: str, **kwargs):
         try:
