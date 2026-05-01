@@ -15,8 +15,16 @@
 # - Sendbird: Lever 방식 사용하다가 Greenhouse board token `sendbird`로
 #             이전한 것 확인 (19개 공고 확인). 하지만 사용자 요청으로 제거.
 #
+# [시행착오]
+# - posted_date 필드에 updated_at 값을 사용
+#   → Greenhouse API 응답에는 updated_at(최종 수정일)과 first_published(최초 게시일) 두 가지 존재.
+#     공고가 자주 수정될 경우 updated_at은 현재 날짜에 가깝게 갱신되어
+#     "방금 올라온 공고"처럼 보이는 오해를 유발.
+#     first_published가 실제 게시일이므로 이것을 우선 사용.
+#     (first_published 없는 경우에만 updated_at 폴백)
+#
 # [현재 등록 회사]
-# - Anthropic: board token `anthropic` (200개+ 공고 확인)
+# - Anthropic: board token `anthropic` (400개+ 공고 확인)
 # ============================================================
 
 from .base import BaseCrawler
@@ -45,7 +53,7 @@ class GreenhouseCrawler(BaseCrawler):
                         title=item.get("title", ""),
                         url=item.get("absolute_url", ""),
                         location=item.get("location", {}).get("name", ""),
-                        posted_date=item.get("updated_at", "")
+                        posted_date=item.get("first_published", "") or item.get("updated_at", "")
                     ))
             except Exception as e:
                 print(f"  ⚠️  {self.company} error: {e}")

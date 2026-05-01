@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(python main.py Naver Upstage Anthropic OpenAI)"
+    ]
+  }
+}

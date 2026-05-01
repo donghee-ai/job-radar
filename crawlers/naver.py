@@ -1,8 +1,8 @@
 # ============================================================
 # Naver 크롤러
 # ============================================================
-# 방식: requests + BeautifulSoup + regex (SSR 페이지)
-# URL: https://recruit.navercorp.com/rcrt/list.do
+# 방식: 내부 AJAX JSON API (GET) — 페이지네이션 지원
+# API: https://recruit.navercorp.com/rcrt/loadJobList.do?firstIndex=N
 #
 # [시행착오]
 # 1. POST API /rcrt/loadJobList.do (빈 payload)
@@ -12,62 +12,100 @@
 #    (/rcrt/loadJobListAjax.do, /rcrt/getJobList.do, /rcrt/jobList.do 등)
 #    → 전부 404.
 #
+# 3. requests + BeautifulSoup — /rcrt/list.do HTML 파싱 (1차 방식)
+#    → 네이버 채용 목록 페이지는 SSR로 첫 10건이 HTML에 포함됨 → 수집 가능.
+#      그러나 페이지 하단의 "더보기" 버튼이 JS 기반(Scroll-to-Load/AJAX)이라
+#      requests로는 추가 페이지를 가져올 수 없어 항상 10건만 수집됨.
+#      실제 공고 수: 20건 → 10건 누락.
+#
+# 4. HTML 내 share('platform', 'annoId', 'title') JS 함수 regex 추출 (2차 폴백)
+#    → 첫 페이지 HTML 내에 있는 공고만 추출 가능. 동일하게 10건 한계.
+#
+# 5. HTML 페이지 내 pagination 링크 탐색
+#    → .next, .prev, [class*=paging] 등 탐색 결과 모두 slick-carousel 슬라이더의
+#      이전/다음 버튼이었음 (class: mainPopup_next, slick-arrow).
+#      실제 공고 목록 페이지네이션 링크는 존재하지 않음.
+#      페이지 소스 JS 변수에서 pageSize="10", totalRows="20" 확인 →
+#      더보기 방식(AJAX)임을 최종 확인.
+#
 # [현재 방식]
-# 네이버 채용 목록 페이지(/rcrt/list.do)는 SSR(서버사이드 렌더링)로
-# 공고 목록이 HTML에 직접 포함되어 있음 → requests로 충분.
-#
-# 공고 식별 방법 (우선순위):
-#   1차: <a href="/rcrt/view.do?annoId={id}"> 형태 링크 직접 파싱
-#   2차: 소셜 공유 JS 함수 share('platform', 'annoId', 'title') 에서 regex로 추출
-#        → annoId는 7자리 이상 숫자, title은 세 번째 인자
-#
-# 공고 상세 URL 패턴: /rcrt/view.do?annoId={annoId}
+# 브라우저 Network 탭에서 발견한 AJAX 엔드포인트를 직접 호출.
+# GET /rcrt/loadJobList.do?firstIndex=N 으로 페이지네이션 처리.
+#   - pageSize: 10 (서버 고정값)
+#   - firstIndex: 0, 10, 20, ... (빈 list 반환 시 종료)
+# 초기 페이지 HTML에서 JS 변수 totalRows 를 파싱해 총 페이지 수 사전 계산.
+# 응답 JSON: { "result": "Y", "list": [...] }
+# jobDetailLink 필드에 상세 URL이 포함되어 별도 URL 조합 불필요.
+# staYmd 필드(YYYYMMDD)를 YYYY-MM-DD 형식으로 변환해 posted_date에 저장.
 # ============================================================
 
 import re
-from bs4 import BeautifulSoup
 from .base import BaseCrawler
+
+PAGE_SIZE = 10
+MAX_PAGES = 50  # 최대 500건 방어
 
 
 class NaverCrawler(BaseCrawler):
     def __init__(self):
         super().__init__("Naver", "IT")
-        self.url = "https://recruit.navercorp.com/rcrt/list.do"
+        self.list_url = "https://recruit.navercorp.com/rcrt/list.do"
+        self.api_url = "https://recruit.navercorp.com/rcrt/loadJobList.do"
 
     def fetch_jobs(self):
         jobs = []
-        resp = self.safe_request(self.url)
-        if not resp:
-            return jobs
-
-        soup = BeautifulSoup(resp.text, "html.parser")
         seen = set()
 
-        # 1차: view.do 직접 링크에서 annoId 추출
-        for a in soup.select("a[href*='view.do?annoId=']"):
-            href = a.get("href", "")
-            m = re.search(r'annoId=(\d+)', href)
-            if not m:
-                continue
-            anno_id = m.group(1)
-            if anno_id in seen:
-                continue
-            seen.add(anno_id)
-            title = a.get_text(strip=True)
-            if title:
-                full_url = "https://recruit.navercorp.com" + href if href.startswith("/") else href
-                jobs.append(self.format_job(title=title, url=full_url))
+        # 초기 페이지에서 totalRows 파악 (페이지 수 사전 계산용)
+        total_rows = self._get_total_rows()
 
-        # 2차: share('platform', 'annoId', 'title') JS 함수에서 regex로 추출
-        if not seen:
-            for m in re.finditer(r"share\('[^']+',\s*'(\d{7,})',\s*'([^']+)'", resp.text):
-                anno_id, title = m.group(1), m.group(2)
-                if anno_id in seen:
+        for page_num in range(MAX_PAGES):
+            first_index = page_num * PAGE_SIZE
+            if total_rows and first_index >= total_rows:
+                break
+
+            resp = self.safe_request(self.api_url, params={"firstIndex": first_index})
+            if not resp:
+                break
+
+            try:
+                data = resp.json()
+            except Exception as e:
+                print(f"  ⚠️  [Naver] JSON 파싱 오류: {e}")
+                break
+
+            items = data.get("list", [])
+            if not items:
+                break
+
+            for item in items:
+                anno_id = str(item.get("annoId", ""))
+                if not anno_id or anno_id in seen:
                     continue
                 seen.add(anno_id)
+
+                title = item.get("annoSubject", "")
+                url = item.get("jobDetailLink", "")
+                if not url:
+                    url = f"https://recruit.navercorp.com/rcrt/view.do?annoId={anno_id}"
+
+                # staYmd: "20260420" → "2026-04-20"
+                raw_date = item.get("staYmd", "")
+                posted = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}" if len(raw_date) == 8 else raw_date
+
                 jobs.append(self.format_job(
                     title=title,
-                    url=f"https://recruit.navercorp.com/rcrt/view.do?annoId={anno_id}"
+                    url=url,
+                    department=item.get("subJobCdNm", ""),
+                    posted_date=posted
                 ))
 
         return jobs
+
+    def _get_total_rows(self) -> int:
+        """초기 페이지 HTML에서 totalRows JS 변수를 추출."""
+        resp = self.safe_request(self.list_url)
+        if not resp:
+            return 0
+        m = re.search(r'totalRows\s*=\s*"(\d+)"', resp.text)
+        return int(m.group(1)) if m else 0

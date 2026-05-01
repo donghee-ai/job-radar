@@ -5,8 +5,11 @@
   python main.py --all        # 모든 크롤러 강제 실행
   python main.py NVIDIA Toss  # 특정 크롤러만 실행
 """
-import json
 import sys
+sys.stdout.reconfigure(encoding='utf-8')
+sys.stderr.reconfigure(encoding='utf-8')
+
+import json
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
@@ -28,6 +31,17 @@ def save_config(cfg):
         json.dump(cfg, f, ensure_ascii=False, indent=2)
 
 
+def load_existing(path: Path):
+    """기존 jobs.json을 로드. 없거나 손상된 경우 빈 구조 반환."""
+    if not path.exists():
+        return {"jobs": [], "results": {}}
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {"jobs": [], "results": {}}
+
+
 def run(targets=None, force_all=False):
     config = load_config()
     crawlers = get_all_crawlers()
@@ -47,29 +61,40 @@ def run(targets=None, force_all=False):
         print("❌ 실행할 크롤러가 없습니다. config.json을 확인하세요.")
         return
 
+    # 부분 실행이면 기존 데이터를 보존하고 해당 회사 항목만 교체
+    is_partial = bool(targets) and not force_all
+    existing = load_existing(OUTPUT_PATH) if is_partial else {"jobs": [], "results": {}}
+    selected_companies = {crawlers[n].company for n in selected}
+
+    carry_jobs = [j for j in existing.get("jobs", []) if j.get("company") not in selected_companies]
+    carry_results = {k: v for k, v in existing.get("results", {}).items() if k not in selected}
+
     print(f"\n{'='*50}")
-    print(f"🚀 크롤링 시작 ({len(selected)}개)")
+    print(f"🚀 크롤링 시작 ({len(selected)}개)" + (" [병합 모드]" if is_partial else ""))
     print(f"{'='*50}\n")
 
-    all_jobs = []
-    results = {}
+    new_jobs = []
+    new_results = {}
 
     for name in selected:
         crawler = crawlers[name]
         print(f"▶ {name}...")
         try:
             jobs = crawler.fetch_jobs()
-            all_jobs.extend(jobs)
-            results[name] = len(jobs)
-            print(f"  ✅ {len(jobs)} jobs\n")
+            new_jobs.extend(jobs)
+            new_results[name] = len(jobs)
+            print(f"  ✅ {len(jobs)}건\n")
         except Exception as e:
-            results[name] = 0
+            new_results[name] = 0
             print(f"  ❌ Error: {e}\n")
+
+    all_jobs = carry_jobs + new_jobs
+    all_results = {**carry_results, **new_results}
 
     output = {
         "updated_at": datetime.now().isoformat(),
         "total": len(all_jobs),
-        "results": results,
+        "results": all_results,
         "jobs": all_jobs
     }
 
@@ -81,9 +106,9 @@ def run(targets=None, force_all=False):
         config["schedule"] = {}
     config["schedule"]["last_updated"] = datetime.now().isoformat()
     save_config(config)
-    
+
     print(f"{'='*50}")
-    print(f"✨ 완료! 총 {len(all_jobs)}개 채용공고")
+    print(f"✨ 완료! 총 {len(all_jobs)}개 채용공고 (신규 {len(new_jobs)}개)")
     print(f"📁 저장 위치: {OUTPUT_PATH}")
     print(f"{'='*50}\n")
 

@@ -66,3 +66,33 @@ class BaseCrawler(ABC):
         except Exception as e:
             print(f"  ⚠️  [{self.company}] Playwright error: {e}")
             return ""
+
+    def playwright_intercept(self, url: str, api_pattern: str, timeout: int = 30000) -> list:
+        """브라우저로 url에 접속하면서 api_pattern이 포함된 XHR/fetch 응답을 캡처해 반환.
+
+        직접 API POST가 CSRF 토큰·세션 쿠키 부재로 봇 차단(400)되는 사이트에서 사용.
+        브라우저가 페이지를 정상 로드하면서 내부 API를 자동 호출하므로,
+        세션 인증이 브라우저 수준에서 투명하게 처리됨.
+        현재 사용처: NVIDIA (Workday 봇 차단 우회)
+        """
+        results = []
+        try:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(user_agent=self.headers['User-Agent'])
+                page = context.new_page()
+
+                def handle_response(response):
+                    if api_pattern in response.url and response.status == 200:
+                        try:
+                            results.append(response.json())
+                        except Exception:
+                            pass
+
+                page.on("response", handle_response)
+                page.goto(url, wait_until="networkidle", timeout=timeout)
+                browser.close()
+        except Exception as e:
+            print(f"  ⚠️  [{self.company}] Intercept error: {e}")
+        return results

@@ -3,9 +3,6 @@
 .env.local
 .env.*.local
 
-# 크롤링 결과 (선택)
-docs/data/jobs.json
-
 # Python
 __pycache__/
 *.py[cod]
