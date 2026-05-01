@@ -28,7 +28,7 @@ from .base import BaseCrawler
 
 class UpstageCrawler(BaseCrawler):
     def __init__(self):
-        super().__init__("Upstage", "스타트업")
+        super().__init__("Upstage", "스타트업", default_location="Seoul, South Korea")
         self.url = "https://careers.upstage.ai/ko/upstage"
 
     def fetch_jobs(self):

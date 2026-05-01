@@ -3,18 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Job Tracker</title>
+<title>Job Radar</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="app">
-    <!-- 헤더 -->
     <header class="header">
         <div class="header-content">
             <div class="brand">
-                <div class="logo">JT</div>
+                <div class="logo">JR</div>
                 <div>
-                    <h1>Job Tracker</h1>
+                    <h1>Job Radar</h1>
                     <p class="subtitle" id="updated">데이터 로딩 중...</p>
                 </div>
             </div>
@@ -22,12 +21,11 @@
         </div>
     </header>
 
-    <!-- 사이드바 + 메인 -->
     <div class="layout">
         <aside class="sidebar">
             <div class="sidebar-section">
-                <h3>카테고리</h3>
-                <div id="category-list" class="filter-list"></div>
+                <h3>직무</h3>
+                <div id="role-list" class="filter-list"></div>
             </div>
             <div class="sidebar-section">
                 <h3>회사</h3>
@@ -43,7 +41,13 @@
                     </svg>
                     <input type="text" id="search" placeholder="직무 또는 키워드 검색...">
                 </div>
-                <div class="result-count" id="count">0개</div>
+                <div class="toolbar-right">
+                    <select id="sort" class="sort-select">
+                        <option value="latest">최신순</option>
+                        <option value="location">위치순</option>
+                    </select>
+                    <div class="result-count" id="count">0개</div>
+                </div>
             </div>
 
             <div id="jobs" class="job-grid"></div>

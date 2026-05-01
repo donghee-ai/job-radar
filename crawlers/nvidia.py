@@ -25,7 +25,33 @@
 # 직접 POST 방식과 달리 Workday 입장에서 정상 브라우저 요청으로 인식됨.
 # ============================================================
 
+import re
+from datetime import datetime, timedelta
 from .base import BaseCrawler
+
+
+def _parse_workday_date(posted_on: str) -> str:
+    """Workday 상대 날짜 텍스트 → YYYY-MM-DD 변환.
+    "Posted 30+ Days Ago" 같은 '+' 표기는 해당 일수를 최솟값으로 처리.
+    파싱 불가 시 빈 문자열 반환."""
+    m = re.search(r'Posted\s+(\d+)\+?\s+Days?\s+Ago', posted_on, re.IGNORECASE)
+    if m:
+        days = int(m.group(1))
+        return (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+    return ""
+
+
+def _clean_location(loc: str) -> str:
+    """Workday 위치 형식 정리.
+    "Korea, Seoul" → "Seoul, South Korea"
+    그 외 country-first 형식도 city-first로 변환."""
+    loc = loc.strip()
+    replacements = {"Korea": "South Korea"}
+    parts = [p.strip() for p in loc.split(",")]
+    if len(parts) == 2:
+        country = replacements.get(parts[0], parts[0])
+        return f"{parts[1]}, {country}"
+    return loc
 
 
 class NvidiaCrawler(BaseCrawler):
@@ -35,7 +61,6 @@ class NvidiaCrawler(BaseCrawler):
 
     def fetch_jobs(self):
         jobs = []
-        # 브라우저가 페이지를 로드하면서 발생하는 Workday API XHR을 캡처
         api_responses = self.playwright_intercept(
             url=f"{self.careers_url}?q=Korea",
             api_pattern="/wday/cxs/nvidia/NVIDIAExternalCareerSite/jobs"
@@ -51,7 +76,7 @@ class NvidiaCrawler(BaseCrawler):
                 jobs.append(self.format_job(
                     title=item.get("title", ""),
                     url=f"https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite{path}",
-                    location=item.get("locationsText", ""),
-                    posted_date=item.get("postedOn", "")
+                    location=_clean_location(item.get("locationsText", "")),
+                    posted_date=_parse_workday_date(item.get("postedOn", ""))
                 ))
         return jobs
