@@ -2,3 +2,4 @@ requests>=2.32.5
 beautifulsoup4==4.12.3
 python-dotenv==1.1.0
 playwright>=1.40.0
+sentence-transformers>=3.0.0

@@ -38,7 +38,7 @@ from .base import BaseCrawler
 
 class SamsungCrawler(BaseCrawler):
     def __init__(self):
-        super().__init__("Samsung", "제조업")
+        super().__init__("Samsung", "제조업", default_location="Seoul, South Korea")
         self.url = "https://www.samsungcareers.com/hr/"
 
     def fetch_jobs(self):

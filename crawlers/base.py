@@ -1,13 +1,15 @@
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import date, datetime
 from typing import List, Dict
+import time
 import requests
 
 
 class BaseCrawler(ABC):
-    def __init__(self, company: str, category: str):
+    def __init__(self, company: str, category: str, default_location: str = ""):
         self.company = company
         self.category = category
+        self.default_location = default_location
         self.headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                           'AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -20,35 +22,62 @@ class BaseCrawler(ABC):
 
     def format_job(self, title: str, url: str, location: str = "",
                    department: str = "", posted_date: str = "") -> Dict:
+        from .classifier import classify_role
         return {
             "company": self.company,
             "category": self.category,
+            "role": classify_role(title),
             "title": title,
             "url": url,
-            "location": location,
+            "location": location or self.default_location,
             "department": department,
             "posted_date": posted_date,
             "crawled_at": datetime.now().isoformat()
         }
 
-    def safe_request(self, url: str, **kwargs):
+    def is_expired(self, end_date_str: str, fmt: str = "%Y%m%d") -> bool:
+        """end_date_str 을 fmt 형식으로 파싱해 오늘보다 이전이면 True 반환.
+        파싱 실패 시 False (마감일 불명확 → 유지)."""
         try:
-            resp = requests.get(url, headers=self.headers, timeout=15, **kwargs)
-            resp.raise_for_status()
-            return resp
-        except requests.exceptions.RequestException as e:
-            print(f"  ⚠️  [{self.company}] Request error: {e}")
-            return None
+            return datetime.strptime(end_date_str, fmt).date() < date.today()
+        except (ValueError, TypeError):
+            return False
 
-    def safe_post(self, url: str, **kwargs):
-        try:
-            merged_headers = {**self.headers, **kwargs.pop('headers', {})}
-            resp = requests.post(url, headers=merged_headers, timeout=15, **kwargs)
-            resp.raise_for_status()
-            return resp
-        except requests.exceptions.RequestException as e:
-            print(f"  ⚠️  [{self.company}] Request error: {e}")
-            return None
+    def safe_request(self, url: str, retries: int = 3, backoff: float = 2.0, **kwargs):
+        """GET 요청. 실패 시 최대 retries회 재시도 (지수 백오프).
+        타임아웃은 기본 30초 — OpenAI(Ashby)처럼 대용량 응답에 여유를 줌."""
+        timeout = kwargs.pop('timeout', 30)
+        for attempt in range(1, retries + 1):
+            try:
+                resp = requests.get(url, headers=self.headers, timeout=timeout, **kwargs)
+                resp.raise_for_status()
+                return resp
+            except requests.exceptions.RequestException as e:
+                if attempt == retries:
+                    print(f"  ⚠️  [{self.company}] Request error (시도 {attempt}/{retries}): {e}")
+                else:
+                    wait = backoff ** (attempt - 1)  # 1s → 2s → 4s
+                    print(f"  ↩️  [{self.company}] 재시도 {attempt}/{retries} ({wait:.0f}초 후): {e}")
+                    time.sleep(wait)
+        return None
+
+    def safe_post(self, url: str, retries: int = 3, backoff: float = 2.0, **kwargs):
+        """POST 요청. 실패 시 최대 retries회 재시도 (지수 백오프)."""
+        timeout = kwargs.pop('timeout', 30)
+        for attempt in range(1, retries + 1):
+            try:
+                merged_headers = {**self.headers, **kwargs.pop('headers', {})}
+                resp = requests.post(url, headers=merged_headers, timeout=timeout, **kwargs)
+                resp.raise_for_status()
+                return resp
+            except requests.exceptions.RequestException as e:
+                if attempt == retries:
+                    print(f"  ⚠️  [{self.company}] Request error (시도 {attempt}/{retries}): {e}")
+                else:
+                    wait = backoff ** (attempt - 1)
+                    print(f"  ↩️  [{self.company}] 재시도 {attempt}/{retries} ({wait:.0f}초 후): {e}")
+                    time.sleep(wait)
+        return None
 
     def playwright_fetch(self, url: str, wait_selector: str = "body", timeout: int = 20000) -> str:
         try:

@@ -48,7 +48,7 @@ MAX_PAGES = 50  # 최대 500건 방어
 
 class NaverCrawler(BaseCrawler):
     def __init__(self):
-        super().__init__("Naver", "IT")
+        super().__init__("Naver", "IT", default_location="Seoul, South Korea")
         self.list_url = "https://recruit.navercorp.com/rcrt/list.do"
         self.api_url = "https://recruit.navercorp.com/rcrt/loadJobList.do"
 
@@ -83,6 +83,10 @@ class NaverCrawler(BaseCrawler):
                 if not anno_id or anno_id in seen:
                     continue
                 seen.add(anno_id)
+
+                # endYmd(마감일)이 오늘 이전이면 제외
+                if self.is_expired(item.get("endYmd", "")):
+                    continue
 
                 title = item.get("annoSubject", "")
                 url = item.get("jobDetailLink", "")

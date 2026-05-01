@@ -39,6 +39,9 @@ class AshbyCrawler(BaseCrawler):
         if resp:
             try:
                 for item in resp.json().get("jobs", []):
+                    # isListed=false는 비공개 전환된 공고 → 제외
+                    if not item.get("isListed", True):
+                        continue
                     jobs.append(self.format_job(
                         title=item.get("title", ""),
                         url=item.get("jobUrl", ""),

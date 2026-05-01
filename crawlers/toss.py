@@ -30,7 +30,7 @@ _NAV_PATHS = {"/career/joining-guide", "/career/culture", "/career/article", "/c
 
 class TossCrawler(BaseCrawler):
     def __init__(self):
-        super().__init__("Toss", "금융")
+        super().__init__("Toss", "금융", default_location="Seoul, South Korea")
         self.url = "https://toss.im/career/jobs"
 
     def fetch_jobs(self):

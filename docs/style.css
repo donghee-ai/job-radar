@@ -168,6 +168,11 @@ body {
     color: white;
 }
 
+.filter-item.filter-empty {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
 .filter-count {
     font-size: 12px;
     background: var(--tag-bg);
@@ -189,6 +194,36 @@ body {
     align-items: center;
     gap: 16px;
     margin-bottom: 20px;
+}
+
+.toolbar-right {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-shrink: 0;
+}
+
+.sort-select {
+    padding: 8px 12px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text);
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.15s;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236e6e73' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 10px center;
+    padding-right: 28px;
+}
+
+.sort-select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.1);
 }
 
 .search-wrap {
@@ -273,15 +308,24 @@ body {
     letter-spacing: 0.5px;
 }
 
-.job-category {
+.role-tag {
     font-size: 11px;
     padding: 3px 8px;
     border-radius: 6px;
-    background: var(--tag-bg);
-    color: var(--text-muted);
     font-weight: 500;
     white-space: nowrap;
+    flex-shrink: 0;
 }
+
+/* 직무 분류별 색상 */
+.role-dev     { background: #e8f0fe; color: #1967d2; }
+.role-ai      { background: #f3e8fd; color: #7b2ff7; }
+.role-sec     { background: #fde8e8; color: #c5221f; }
+.role-sales   { background: #e6f4ea; color: #137333; }
+.role-mkt     { background: #fef3e2; color: #b45309; }
+.role-product { background: #e8f5f9; color: #0277bd; }
+.role-ops     { background: #f1f3f4; color: #5f6368; }
+.role-etc     { background: var(--tag-bg); color: var(--text-muted); }
 
 .job-title {
     font-size: 15px;
