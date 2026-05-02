@@ -21,7 +21,7 @@
 
 - **백엔드**: Python 크롤러 → `docs/data/jobs.json` 생성
 - **프론트엔드**: 순수 HTML/CSS/JS 정적 사이트 (GitHub Pages 배포)
-- **자동화**: GitHub Actions 매주 월요일 09:00 KST 실행 (선택)
+- **자동화**: GitHub Actions 매일 09:00 KST 실행 (선택)
 
 ---
 
@@ -48,7 +48,7 @@ job-radar/
 │   └── data/
 │       └── jobs.json        # 크롤링 결과 (자동 생성)
 ├── .github/workflows/
-│   └── weekly-crawl.yml     # GitHub Actions 워크플로우
+│   └── daily-crawl.yml      # GitHub Actions 워크플로우 (매일 09:00 KST)
 ├── main.py                  # 크롤링 실행 진입점
 ├── server.py                # 로컬 개발 서버
 ├── toggle_schedule.py       # GitHub Actions 스케줄 on/off
@@ -333,7 +333,7 @@ AI / ML → 보안 → 영업/사업개발 → 마케팅 → 제품/기획 → �
 {
   "schedule": {
     "enabled": false,
-    "interval": "weekly",
+    "interval": "daily",
     "last_updated": "2026-05-01T15:00:00"
   },
   "crawlers": {
@@ -356,18 +356,27 @@ AI / ML → 보안 → 영업/사업개발 → 마케팅 → 제품/기획 → �
 
 ## 9. GitHub Actions 자동화
 
-**파일**: `.github/workflows/weekly-crawl.yml`
+**파일**: `.github/workflows/daily-crawl.yml`
 
 ```
-매주 월요일 00:00 UTC (09:00 KST)
+매일 00:00 UTC (09:00 KST)
   → config.json의 schedule.enabled 확인
   → true일 때만 실행:
-      pip install -r requirements.txt
-      playwright install chromium --with-deps
+      pip install (pip 캐시 활용)
+      Playwright chromium 설치 (requirements.txt 해시 기반 캐시)
       python main.py
       git add -f docs/data/jobs.json config.json
       git commit & push
 ```
+
+**주요 설정**
+
+| 항목 | 값 | 이유 |
+|------|----|------|
+| `concurrency: group: crawl` | 동시 실행 1개로 제한 | 중복 push 충돌 방지 |
+| `timeout-minutes: 60` | 최대 60분 | Playwright 크롤링이 걸려도 runner 낭비 차단 |
+| `cache: "pip"` | pip 캐시 | 의존성 재설치 시간 단축 |
+| Playwright 캐시 | `requirements.txt` 해시 키 | 브라우저 바이너리 재다운로드 방지 |
 
 **주의**: `git add -f` 플래그 필수.
 `docs/data/jobs.json`이 `.gitignore`에 등록되어 있어

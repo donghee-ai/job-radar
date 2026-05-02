@@ -1,5 +1,5 @@
 """
-일주일 단위 자동 크롤링 활성화/비활성화 토글
+하루 단위 자동 크롤링 활성화/비활성화 토글
 
 사용법:
   python toggle_schedule.py status   # 현재 상태 확인
@@ -38,7 +38,7 @@ def toggle(enabled: bool):
     save(cfg)
     print(f"\n{'✅ 자동 크롤링 활성화됨' if enabled else '⛔ 자동 크롤링 비활성화됨'}")
     if enabled:
-        print("📌 GitHub Actions에 push하면 매주 월요일 자동 실행됩니다.\n")
+        print("📌 GitHub Actions에 push하면 매일 09:00 KST에 자동 실행됩니다.\n")
     else:
         print("📌 수동으로만 실행됩니다: python main.py\n")
 

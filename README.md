@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![GitHub Actions](https://img.shields.io/badge/CI-GitHub%20Actions-blue)](https://github.com/features/actions)
 
-**[Live Demo](https://USERNAME.github.io/job-radar/)** • **[Screenshots](#screenshots)**
+**[Live Demo](https://danny20041002.github.io/job-radar/)** • **[Architecture](ARCHITECTURE.md)**
 
 ---
 
@@ -18,7 +18,7 @@ Tired of checking 20+ career pages every week, I built a unified dashboard that 
 
 - **Multi-source crawling** — Supports Workday, Greenhouse, Lever, and custom APIs
 - **Clean local dashboard** — Apple-inspired UI with category/company filters
-- **Manual-first, auto-optional** — Run on demand or enable weekly automation
+- **Manual-first, auto-optional** — Run on demand or enable daily automation
 - **Extensible architecture** — Add new companies by inheriting `BaseCrawler`
 - **Zero-cost deployment** — Pure static site + GitHub Actions
 
@@ -33,7 +33,7 @@ Tired of checking 20+ career pages every week, I built a unified dashboard that 
 
 ```bash
 # 1. 저장소 클론
-git clone https://github.com/USERNAME/job-radar.git
+git clone https://github.com/danny20041002/job-radar.git
 cd job-radar
 
 # 2. 가상환경 생성 및 활성화
@@ -68,15 +68,26 @@ python main.py --all
 python server.py
 ```
 
+### GitHub Pages 라이브 데모 설정 (선택)
+
+1. GitHub 리포지토리 → **Settings** → **Pages**
+2. Source: `Deploy from a branch` → Branch: `main` / `docs` → Save
+3. 잠시 후 `https://danny20041002.github.io/job-radar/` 에서 접근 가능
+
 ### GitHub Actions 자동화 (선택)
 
-매주 월요일 09:00 KST에 자동 크롤링하려면:
+매일 09:00 KST에 자동 크롤링하려면:
 
 ```bash
 python toggle_schedule.py on   # 활성화
 python toggle_schedule.py off  # 비활성화
 ```
 
+활성화 후 변경사항을 push하면 이후부터 매일 자동 실행됩니다.
+
 ---
 
 ## Architecture
+
+Python 크롤러 (`crawlers/`) → `docs/data/jobs.json` → GitHub Pages 정적 UI.
+자세한 내용은 [ARCHITECTURE.md](ARCHITECTURE.md) 참고.
