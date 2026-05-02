@@ -6,7 +6,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![GitHub Actions](https://img.shields.io/badge/CI-GitHub%20Actions-blue)](https://github.com/features/actions)
 
-**[Live Demo](https://danny20041002.github.io/job-radar/)** • **[Architecture](ARCHITECTURE.md)**
+**[Live Demo](https://donghee-ai.github.io/job-radar/)** • **[Architecture](ARCHITECTURE.md)**
 
 ---
 
@@ -33,7 +33,7 @@ Tired of checking 20+ career pages every week, I built a unified dashboard that 
 
 ```bash
 # 1. 저장소 클론
-git clone https://github.com/danny20041002/job-radar.git
+git clone https://github.com/donghee-ai/job-radar.git
 cd job-radar
 
 # 2. 가상환경 생성 및 활성화
@@ -72,7 +72,7 @@ python server.py
 
 1. GitHub 리포지토리 → **Settings** → **Pages**
 2. Source: `Deploy from a branch` → Branch: `main` / `docs` → Save
-3. 잠시 후 `https://danny20041002.github.io/job-radar/` 에서 접근 가능
+3. 잠시 후 `https://donghee-ai.github.io/job-radar/` 에서 접근 가능
 
 ### GitHub Actions 자동화 (선택)
 
