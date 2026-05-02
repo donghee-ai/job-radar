@@ -1,6 +1,6 @@
 {
   "schedule": {
-    "enabled": false,
+    "enabled": true,
     "interval": "daily",
     "last_updated": "2026-05-02T00:56:44.936064"
   },
