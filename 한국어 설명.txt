@@ -438,9 +438,9 @@ def get_all_crawlers():
 
 ### 사이트 유형별 권장 방식
 
-| 사이트 유형                    | 권장 방식                                                          |
-| ------------------------------ | ------------------------------------------------------------------ |
+| 사이트 유형                     | 권장 방식                                                           |
+| ------------------------------ | ------------------------------------------------------------------|
 | Greenhouse / Ashby / Lever ATS | `generic_greenhouse.py` 또는 `generic_ashby.py`에 board_token 추가 |
-| SSR (서버 렌더링)              | `safe_request()` + BeautifulSoup                                   |
-| CSR / SPA (React, Next.js)     | `playwright_fetch()`                                               |
-| API가 봇 차단인 경우           | `playwright_intercept()`                                           |
+| SSR (서버 렌더링)               | `safe_request()` + BeautifulSoup                                   |
+| CSR / SPA (React, Next.js)     | `playwright_fetch()`                                              |
+| API가 봇 차단인 경우            | `playwright_intercept()`                                           |

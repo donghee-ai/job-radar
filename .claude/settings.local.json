@@ -2,7 +2,24 @@
   "permissions": {
     "allow": [
       "Bash(python -c ' *)",
-      "Bash(python main.py Naver Upstage Anthropic OpenAI)"
+      "Bash(python main.py Naver Upstage Anthropic OpenAI)",
+      "Bash(python -m pytest *)",
+      "PowerShell(python -c \"import json,sys; json.load\\(sys.stdin\\); print\\('JSON OK'\\)\")"
+    ]
+  },
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python .claude/hooks/run_tests.py",
+            "timeout": 120,
+            "statusMessage": "테스트 실행 중..."
+          }
+        ]
+      }
     ]
   }
 }
