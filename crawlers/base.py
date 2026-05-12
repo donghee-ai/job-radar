@@ -103,6 +103,10 @@ class BaseCrawler(ABC):
         브라우저가 페이지를 정상 로드하면서 내부 API를 자동 호출하므로,
         세션 인증이 브라우저 수준에서 투명하게 처리됨.
         현재 사용처: NVIDIA (Workday 봇 차단 우회)
+
+        참고: SPA가 JS 번들 로드 후 비동기로 API를 호출하기 때문에
+        networkidle로는 API 응답 캡처 전에 종료될 수 있음.
+        domcontentloaded + 명시적 대기로 해결.
         """
         results = []
         try:
@@ -112,15 +116,32 @@ class BaseCrawler(ABC):
                 context = browser.new_context(user_agent=self.headers['User-Agent'])
                 page = context.new_page()
 
+                api_hit = []
+
                 def handle_response(response):
                     if api_pattern in response.url and response.status == 200:
                         try:
                             results.append(response.json())
+                            api_hit.append(True)
                         except Exception:
                             pass
 
                 page.on("response", handle_response)
-                page.goto(url, wait_until="networkidle", timeout=timeout)
+                page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+
+                # SPA가 JS 번들 로드 → API 호출까지 시간이 걸리므로
+                # 타겟 API 응답이 올 때까지 폴링 대기 (최대 timeout)
+                deadline = timeout
+                poll_interval = 500
+                waited = 0
+                while not api_hit and waited < deadline:
+                    page.wait_for_timeout(poll_interval)
+                    waited += poll_interval
+
+                # API 응답 후 추가 데이터 로딩 여유
+                if api_hit:
+                    page.wait_for_timeout(1000)
+
                 browser.close()
         except Exception as e:
             print(f"  ⚠️  [{self.company}] Intercept error: {e}")
