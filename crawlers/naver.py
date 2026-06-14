@@ -37,6 +37,9 @@
 # 응답 JSON: { "result": "Y", "list": [...] }
 # jobDetailLink 필드에 상세 URL이 포함되어 별도 URL 조합 불필요.
 # staYmd 필드(YYYYMMDD)를 YYYY-MM-DD 형식으로 변환해 posted_date에 저장.
+#
+# [상세 페이지]
+# 네이버 상세 페이지는 JS 리다이렉트 방식이라 Playwright로 렌더링 후 자격 요건 추출.
 # ============================================================
 
 import re
@@ -55,6 +58,7 @@ class NaverCrawler(BaseCrawler):
     def fetch_jobs(self):
         jobs = []
         seen = set()
+        detail_urls = []  # (index, url) 쌍
 
         # 초기 페이지에서 totalRows 파악 (페이지 수 사전 계산용)
         total_rows = self._get_total_rows()
@@ -97,12 +101,18 @@ class NaverCrawler(BaseCrawler):
                 raw_date = item.get("staYmd", "")
                 posted = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}" if len(raw_date) == 8 else raw_date
 
+                idx = len(jobs)
                 jobs.append(self.format_job(
                     title=title,
                     url=url,
                     department=item.get("subJobCdNm", ""),
                     posted_date=posted
                 ))
+                detail_urls.append((idx, url))
+
+        # 상세 페이지 일괄 크롤링
+        if detail_urls:
+            self._fill_descriptions(jobs, detail_urls)
 
         return jobs
 
@@ -113,3 +123,27 @@ class NaverCrawler(BaseCrawler):
             return 0
         m = re.search(r'totalRows\s*=\s*"(\d+)"', resp.text)
         return int(m.group(1)) if m else 0
+
+    def _fill_descriptions(self, jobs: list, detail_urls: list):
+        """Playwright로 상세 페이지들을 방문해 지원 자격 추출."""
+        try:
+            from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(user_agent=self.headers['User-Agent'])
+                page = context.new_page()
+
+                for idx, url in detail_urls:
+                    try:
+                        page.goto(url, wait_until="domcontentloaded", timeout=15000)
+                        page.wait_for_timeout(3000)
+                        html = page.content()
+                        desc = self.extract_qualifications(html)
+                        if desc:
+                            jobs[idx]["description"] = desc
+                    except Exception as e:
+                        print(f"  ⚠️  [Naver] Detail page error: {e}")
+
+                browser.close()
+        except Exception as e:
+            print(f"  ⚠️  [Naver] Playwright error: {e}")

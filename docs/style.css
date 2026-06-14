@@ -19,7 +19,7 @@
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard', 
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Pretendard',
                  'Noto Sans KR', sans-serif;
     background: var(--bg);
     color: var(--text);
@@ -119,6 +119,77 @@ body {
     position: sticky;
     top: 110px;
     height: fit-content;
+}
+
+/* Sidebar Tabs */
+.sidebar-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+}
+
+.sidebar-tab {
+    flex: 1;
+    padding: 10px 0;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: inherit;
+}
+
+.sidebar-tab:hover {
+    color: var(--text);
+}
+
+.sidebar-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+.tab-panel {
+    display: none;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
+/* Active filter chip */
+.active-filters {
+    margin-bottom: 8px;
+    min-height: 0;
+}
+
+.filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--primary);
+    color: white;
+    border-radius: 16px;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.chip-remove {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0;
+    line-height: 1;
+    font-family: inherit;
+}
+
+.chip-remove:hover {
+    color: white;
 }
 
 .sidebar-section {
@@ -293,6 +364,29 @@ body {
     transform: translateY(-2px);
 }
 
+/* Freshness highlights */
+.job-new {
+    border-left: 3px solid var(--primary);
+}
+
+.job-recent {
+    border-left: 3px solid #c8d6e5;
+}
+
+.badge-new {
+    display: inline-block;
+    background: var(--primary);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    vertical-align: middle;
+}
+
 .job-header {
     display: flex;
     justify-content: space-between;
@@ -352,6 +446,43 @@ body {
     display: flex;
     align-items: center;
     gap: 4px;
+}
+
+/* Tooltip */
+.job-tooltip {
+    position: absolute;
+    z-index: 200;
+    background: var(--text);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.6;
+    max-width: 320px;
+    pointer-events: none;
+    transform: translateX(-50%);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    display: none;
+}
+
+.job-tooltip.visible {
+    display: block;
+}
+
+.tooltip-meta {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.tooltip-desc {
+    line-height: 1.5;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    white-space: normal;
 }
 
 /* Empty */

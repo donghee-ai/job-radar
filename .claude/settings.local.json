@@ -4,7 +4,9 @@
       "Bash(python -c ' *)",
       "Bash(python main.py Naver Upstage Anthropic OpenAI)",
       "Bash(python -m pytest *)",
-      "PowerShell(python -c \"import json,sys; json.load\\(sys.stdin\\); print\\('JSON OK'\\)\")"
+      "PowerShell(python -c \"import json,sys; json.load\\(sys.stdin\\); print\\('JSON OK'\\)\")",
+      "WebFetch(domain:api.ashbyhq.com)",
+      "Bash(python main.py Toss)"
     ]
   },
   "hooks": {

@@ -12,7 +12,7 @@
 
 ## Why I Built This
 
-Tired of checking 20+ career pages every week, I built a unified dashboard that automatically aggregates job postings from companies I'm interested in — including global tech giants (NVIDIA, OpenAI, Anthropic), Korean IT (Naver, Toss), and AI startups (Upstage, Furiosa).
+Tired of checking 20+ career pages every week, I built a unified dashboard that automatically aggregates job postings from companies I'm interested in — including global tech giants (NVIDIA, OpenAI, Anthropic), Korean IT (Naver, Toss), and AI startups (Upstage).
 
 ## Features
 
@@ -32,11 +32,11 @@ Tired of checking 20+ career pages every week, I built a unified dashboard that 
 ### Installation
 
 ```bash
-# 1. 저장소 클론
+# 1. Clone the repository
 git clone https://github.com/donghee-ai/job-radar.git
 cd job-radar
 
-# 2. 가상환경 생성 및 활성화
+# 2. Create and activate virtual environment
 python -m venv venv
 
 # Windows
@@ -44,50 +44,50 @@ venv\Scripts\activate
 # Mac / Linux
 # source venv/bin/activate
 
-# 3. 패키지 설치
+# 3. Install dependencies
 pip install -r requirements.txt
 
-# 4. Playwright 브라우저 바이너리 설치
-#    (pip 설치만으로는 부족 — 이 단계를 빠뜨리면 Google/Samsung/Toss/NVIDIA 크롤러 실패)
+# 4. Install Playwright browser binaries
+#    (pip install alone is not enough — skipping this step will break Google/Samsung/Toss/NVIDIA crawlers)
 playwright install chromium
 ```
 
 ### Usage
 
 ```bash
-# 전체 크롤링 (config.json에서 활성화된 회사)
+# Crawl all enabled companies (see config.json)
 python main.py
 
-# 특정 회사만
+# Crawl specific companies only
 python main.py Google NVIDIA Toss
 
-# 모든 회사 강제 실행
+# Force-crawl all companies
 python main.py --all
 
-# 로컬 대시보드 열기
+# Open local dashboard
 python server.py
 ```
 
-### GitHub Pages 라이브 데모 설정 (선택)
+### GitHub Pages Live Demo (Optional)
 
-1. GitHub 리포지토리 → **Settings** → **Pages**
+1. Go to your GitHub repository → **Settings** → **Pages**
 2. Source: `Deploy from a branch` → Branch: `main` / `docs` → Save
-3. 잠시 후 `https://donghee-ai.github.io/job-radar/` 에서 접근 가능
+3. After a moment, your site will be available at `https://donghee-ai.github.io/job-radar/`
 
-### GitHub Actions 자동화 (선택)
+### GitHub Actions Automation (Optional)
 
-매일 09:00 KST에 자동 크롤링하려면:
+To enable daily auto-crawling at 09:00 KST:
 
 ```bash
-python toggle_schedule.py on   # 활성화
-python toggle_schedule.py off  # 비활성화
+python toggle_schedule.py on   # Enable
+python toggle_schedule.py off  # Disable
 ```
 
-활성화 후 변경사항을 push하면 이후부터 매일 자동 실행됩니다.
+Push the changes after enabling, and the workflow will run automatically every day.
 
 ---
 
 ## Architecture
 
-Python 크롤러 (`crawlers/`) → `docs/data/jobs.json` → GitHub Pages 정적 UI.
-자세한 내용은 [ARCHITECTURE.md](ARCHITECTURE.md) 참고.
+Python crawlers (`crawlers/`) → `docs/data/jobs.json` → GitHub Pages static UI.
+See [ARCHITECTURE.md](ARCHITECTURE.md) for details.

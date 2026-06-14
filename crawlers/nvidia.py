@@ -23,6 +23,10 @@
 # playwright_intercept()가 /wday/cxs/ 패턴 응답을 실시간 캡처 → jobPostings 파싱.
 # 브라우저 세션에서 CSRF 토큰과 쿠키가 자동으로 처리되므로 400 문제 해결.
 # 직접 POST 방식과 달리 Workday 입장에서 정상 브라우저 요청으로 인식됨.
+#
+# [상세 페이지]
+# 목록 수집 후 별도 Playwright 세션으로 각 공고 URL을 방문해
+# Workday 상세 페이지의 자격 요건(Qualifications 등) 추출.
 # ============================================================
 
 import re
@@ -67,16 +71,49 @@ class NvidiaCrawler(BaseCrawler):
         )
 
         seen = set()
+        detail_urls = []  # (index, url)
         for data in api_responses:
             for item in data.get("jobPostings", []):
                 path = item.get("externalPath", "")
                 if not path or path in seen:
                     continue
                 seen.add(path)
+                url = f"https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite{path}"
+                idx = len(jobs)
                 jobs.append(self.format_job(
                     title=item.get("title", ""),
-                    url=f"https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite{path}",
+                    url=url,
                     location=_clean_location(item.get("locationsText", "")),
                     posted_date=_parse_workday_date(item.get("postedOn", ""))
                 ))
+                detail_urls.append((idx, url))
+
+        # 상세 페이지 일괄 방문
+        if detail_urls:
+            self._fill_descriptions(jobs, detail_urls)
+
         return jobs
+
+    def _fill_descriptions(self, jobs: list, detail_urls: list):
+        """Playwright로 Workday 상세 페이지 방문, 자격 요건 추출."""
+        try:
+            from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
+            with sync_playwright() as p:
+                browser = p.chromium.launch(headless=True)
+                context = browser.new_context(user_agent=self.headers['User-Agent'])
+                page = context.new_page()
+
+                for idx, url in detail_urls:
+                    try:
+                        page.goto(url, wait_until="domcontentloaded", timeout=20000)
+                        page.wait_for_timeout(3000)
+                        html = page.content()
+                        desc = self.extract_qualifications(html)
+                        if desc:
+                            jobs[idx]["description"] = desc
+                    except Exception as e:
+                        print(f"  ⚠️  [NVIDIA] Detail page error: {e}")
+
+                browser.close()
+        except Exception as e:
+            print(f"  ⚠️  [NVIDIA] Playwright error: {e}")

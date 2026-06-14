@@ -15,7 +15,8 @@ class _Dummy(BaseCrawler):
 
 
 REQUIRED_FIELDS = {"company", "category", "role", "title", "url",
-                   "location", "department", "posted_date", "crawled_at"}
+                   "location", "department", "posted_date", "description",
+                   "crawled_at"}
 
 
 class TestFormatJob:

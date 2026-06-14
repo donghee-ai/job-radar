@@ -43,6 +43,8 @@
 # - page.evaluate()로 JS 컨텍스트에서 a.href 프로퍼티 기준 필터링
 #   (항상 full URL 반환 → 절대경로로 저장된 링크도 전부 캡처)
 # - 페이지네이션: aria-label="Go to next page" 링크의 href (?page=N) 로 URL 이동
+# - 상세 페이지: 목록 수집 완료 후 동일 브라우저 세션으로 각 상세 페이지 방문해
+#   Minimum/Preferred qualifications 섹션 추출
 # ============================================================
 
 from .base import BaseCrawler
@@ -56,6 +58,7 @@ class GoogleCrawler(BaseCrawler):
     def fetch_jobs(self):
         jobs = []
         seen = set()
+        job_urls = []  # (index, url) for detail fetching
 
         try:
             from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
@@ -80,8 +83,6 @@ class GoogleCrawler(BaseCrawler):
                         break
 
                     # a.href 프로퍼티(항상 full URL)로 필터링.
-                    # querySelectorAll('a[href*=...]') CSS 속성 셀렉터는 HTML에 저장된
-                    # 상대경로 기준이라 절대경로로 저장된 Google 링크 대부분을 놓침.
                     raw = pg.evaluate("""() => [...new Set(
                         [...document.querySelectorAll('a')]
                             .map(a => a.href)
@@ -96,7 +97,9 @@ class GoogleCrawler(BaseCrawler):
                         # URL의 slug 부분에서 직무명 추출: .../results/123-software-engineer?...
                         slug = href.split("/jobs/results/")[-1].split("?")[0]
                         title = " ".join(slug.split("-")[1:]).title() if "-" in slug else slug
+                        idx = len(jobs)
                         jobs.append(self.format_job(title=title, url=href, location="South Korea"))
+                        job_urls.append((idx, href))
                         new_count += 1
 
                     if new_count == 0:
@@ -111,6 +114,18 @@ class GoogleCrawler(BaseCrawler):
                         break
 
                     pg.goto(next_href, wait_until="networkidle", timeout=30000)
+
+                # 상세 페이지 일괄 방문해 자격 요건 추출
+                for idx, url in job_urls:
+                    try:
+                        pg.goto(url, wait_until="domcontentloaded", timeout=15000)
+                        pg.wait_for_timeout(3000)
+                        html = pg.content()
+                        desc = self.extract_qualifications(html)
+                        if desc:
+                            jobs[idx]["description"] = desc
+                    except Exception:
+                        pass
 
                 browser.close()
         except Exception as e:

@@ -21,7 +21,9 @@ class BaseCrawler(ABC):
         pass
 
     def format_job(self, title: str, url: str, location: str = "",
-                   department: str = "", posted_date: str = "") -> Dict:
+                   department: str = "", posted_date: str = "",
+                   description: str = "", employment_type: str = "",
+                   salary: str = "") -> Dict:
         from .classifier import classify_role
         return {
             "company": self.company,
@@ -32,8 +34,79 @@ class BaseCrawler(ABC):
             "location": location or self.default_location,
             "department": department,
             "posted_date": posted_date,
+            "description": description,
+            "employment_type": employment_type,
+            "salary": salary,
             "crawled_at": datetime.now().isoformat()
         }
+
+    @staticmethod
+    def strip_html(html: str, max_length: int = 200) -> str:
+        """HTML 태그를 제거하고 max_length로 잘라 반환."""
+        import re
+        text = re.sub(r'<[^>]+>', ' ', html)
+        text = re.sub(r'\s+', ' ', text).strip()
+        if len(text) > max_length:
+            text = text[:max_length].rsplit(' ', 1)[0] + '…'
+        return text
+
+    @staticmethod
+    def extract_qualifications(html: str, max_length: int = 300) -> str:
+        """HTML에서 지원 자격/요건 섹션을 우선 추출, 없으면 전체 요약.
+
+        한국어/영어 자격 요건 키워드를 탐색해 해당 섹션 본문을 반환.
+        """
+        import re
+        from bs4 import BeautifulSoup
+
+        soup = BeautifulSoup(html, "html.parser")
+
+        # 자격 요건 관련 키워드 (우선순위 순)
+        qual_patterns = [
+            r'이런\s*경험이\s*있으면\s*더\s*좋아요',
+            r'필수\s*(?:사항|요건|자격|조건)',
+            r'자격\s*(?:요건|조건|사항)',
+            r'지원\s*(?:자격|조건|요건)',
+            r'이런\s*분.*(?:찾|모시|함께)',
+            r'우대\s*(?:사항|요건|조건)',
+            r'minimum\s*qualifications?',
+            r'required\s*qualifications?',
+            r'preferred\s*qualifications?',
+            r'what\s*(?:you.ll|we)\s*(?:need|require|bring)',
+            r'requirements?',
+            r'qualifications?',
+            r'who\s*you\s*are',
+        ]
+
+        # 모든 heading 태그와 bold/strong 요소에서 키워드 탐색
+        headers = soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'b', 'p'])
+        for pattern in qual_patterns:
+            for header in headers:
+                header_text = header.get_text(strip=True)
+                if re.search(pattern, header_text, re.IGNORECASE):
+                    # 이 헤더 다음의 콘텐츠를 수집
+                    parts = []
+                    for sibling in header.find_next_siblings():
+                        # 다음 헤더/섹션 시작이면 중단
+                        if sibling.name in ['h1', 'h2', 'h3', 'h4', 'h5', 'h6']:
+                            break
+                        if sibling.name in ['strong', 'b'] and len(sibling.get_text(strip=True)) < 50:
+                            break
+                        text = sibling.get_text(strip=True)
+                        if text:
+                            parts.append(text)
+                    if parts:
+                        result = ' '.join(parts)
+                        if len(result) > max_length:
+                            result = result[:max_length].rsplit(' ', 1)[0] + '…'
+                        return result
+
+        # 키워드 매칭 실패 시 → 전체 텍스트 요약
+        full_text = soup.get_text(' ', strip=True)
+        full_text = re.sub(r'\s+', ' ', full_text).strip()
+        if len(full_text) > max_length:
+            full_text = full_text[:max_length].rsplit(' ', 1)[0] + '…'
+        return full_text
 
     def is_expired(self, end_date_str: str, fmt: str = "%Y%m%d") -> bool:
         """end_date_str 을 fmt 형식으로 파싱해 오늘보다 이전이면 True 반환.

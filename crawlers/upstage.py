@@ -19,10 +19,9 @@
 # (→ Playwright 없이 requests만으로 충분)
 # 공고 링크 패턴: /ko/o/{숫자id}
 # BeautifulSoup으로 해당 패턴의 a 태그를 파싱해 제목과 URL 추출.
-# 확인 기준 45개 공고.
+# 상세 페이지도 SSR이므로 requests로 지원 자격 추출 가능.
 # ============================================================
 
-from bs4 import BeautifulSoup
 from .base import BaseCrawler
 
 
@@ -36,6 +35,7 @@ class UpstageCrawler(BaseCrawler):
         resp = self.safe_request(self.url)
         if not resp:
             return jobs
+        from bs4 import BeautifulSoup
         soup = BeautifulSoup(resp.text, "html.parser")
         seen = set()
         for a in soup.select("a[href*='/ko/o/']"):
@@ -47,5 +47,13 @@ class UpstageCrawler(BaseCrawler):
             if not title:
                 continue
             full_url = "https://careers.upstage.ai" + href if href.startswith("/") else href
-            jobs.append(self.format_job(title=title, url=full_url))
+            desc = self._fetch_detail(full_url)
+            jobs.append(self.format_job(title=title, url=full_url, description=desc))
         return jobs
+
+    def _fetch_detail(self, url: str) -> str:
+        """상세 페이지에서 지원 자격 추출 (SSR → requests 가능)."""
+        resp = self.safe_request(url)
+        if not resp:
+            return ""
+        return self.extract_qualifications(resp.text)

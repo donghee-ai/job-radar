@@ -44,16 +44,26 @@ class GreenhouseCrawler(BaseCrawler):
 
     def fetch_jobs(self):
         jobs = []
-        url = f"https://boards-api.greenhouse.io/v1/boards/{self.board_token}/jobs"
+        url = f"https://boards-api.greenhouse.io/v1/boards/{self.board_token}/jobs?content=true"
         resp = self.safe_request(url)
         if resp:
             try:
                 for item in resp.json().get("jobs", []):
+                    # departments 배열에서 첫 번째 부서명 추출
+                    depts = item.get("departments", [])
+                    dept = depts[0].get("name", "") if depts else ""
+
+                    # content(HTML)에서 자격 요건 우선 추출
+                    raw_content = item.get("content", "")
+                    desc = self.extract_qualifications(raw_content) if raw_content else ""
+
                     jobs.append(self.format_job(
                         title=item.get("title", ""),
                         url=item.get("absolute_url", ""),
                         location=item.get("location", {}).get("name", ""),
-                        posted_date=item.get("first_published", "") or item.get("updated_at", "")
+                        department=dept,
+                        posted_date=item.get("first_published", "") or item.get("updated_at", ""),
+                        description=desc,
                     ))
             except Exception as e:
                 print(f"  ⚠️  {self.company} error: {e}")

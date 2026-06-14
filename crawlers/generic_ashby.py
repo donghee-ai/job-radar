@@ -42,12 +42,18 @@ class AshbyCrawler(BaseCrawler):
                     # isListed=false는 비공개 전환된 공고 → 제외
                     if not item.get("isListed", True):
                         continue
+
+                    # descriptionHtml에서 자격 요건 우선 추출
+                    raw_html = item.get("descriptionHtml", "")
+                    raw_desc = self.extract_qualifications(raw_html) if raw_html else ""
+
                     jobs.append(self.format_job(
                         title=item.get("title", ""),
                         url=item.get("jobUrl", ""),
                         location=item.get("location", ""),
                         department=item.get("department", ""),
-                        posted_date=item.get("publishedAt", "")
+                        posted_date=item.get("publishedAt", ""),
+                        description=raw_desc,
                     ))
             except Exception as e:
                 print(f"  ⚠️  {self.company} error: {e}")

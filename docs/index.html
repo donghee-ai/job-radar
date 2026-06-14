@@ -25,12 +25,15 @@
 
     <div class="layout">
         <aside class="sidebar">
-            <div class="sidebar-section">
-                <h3>직무</h3>
+            <div class="active-filters" id="active-filters"></div>
+            <div class="sidebar-tabs">
+                <button class="sidebar-tab active" data-tab="roles">직무</button>
+                <button class="sidebar-tab" data-tab="companies">회사</button>
+            </div>
+            <div class="tab-panel active" id="panel-roles">
                 <div id="role-list" class="filter-list"></div>
             </div>
-            <div class="sidebar-section">
-                <h3>회사</h3>
+            <div class="tab-panel" id="panel-companies">
                 <div id="company-list" class="filter-list"></div>
             </div>
         </aside>
@@ -62,6 +65,8 @@
         </main>
     </div>
 </div>
+
+<div id="job-tooltip" class="job-tooltip"></div>
 
 <script src="app.js"></script>
 </body>
