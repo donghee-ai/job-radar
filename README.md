@@ -8,6 +8,8 @@
 
 **[Live Demo](https://donghee-ai.github.io/job-radar/)** • **[Architecture](ARCHITECTURE.md)**
 
+![Job Radar Dashboard](docs/screenshot.png)
+
 ---
 
 ## Why I Built This
