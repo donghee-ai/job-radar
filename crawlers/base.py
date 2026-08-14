@@ -1,8 +1,24 @@
 from abc import ABC, abstractmethod
-from datetime import date, datetime
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict
 import time
 import requests
+
+KST = timezone(timedelta(hours=9))
+
+
+def now_utc() -> datetime:
+    """기록용 현재 시각 — UTC.
+    isoformat() 결과에 +00:00 오프셋이 붙는다. 오프셋만 있으면 표시 계층이
+    어느 지역 시간으로든 정확히 변환하므로, 저장은 UTC로 통일한다."""
+    return datetime.now(timezone.utc)
+
+
+def now_kst() -> datetime:
+    """한국 달력 기준 판단용 현재 시각(UTC+9).
+    '한국에서 오늘이 며칠인가'가 기준인 값에만 쓴다 — 크롤은 04:07 KST
+    (= 전날 19:07 UTC)에 돌기 때문에 UTC로 날짜를 구하면 하루 밀린다."""
+    return datetime.now(KST)
 
 
 class BaseCrawler(ABC):
@@ -32,14 +48,14 @@ class BaseCrawler(ABC):
             "location": location or self.default_location,
             "department": department,
             "posted_date": posted_date,
-            "crawled_at": datetime.now().isoformat()
+            "crawled_at": now_utc().isoformat()
         }
 
     def is_expired(self, end_date_str: str, fmt: str = "%Y%m%d") -> bool:
         """end_date_str 을 fmt 형식으로 파싱해 오늘보다 이전이면 True 반환.
         파싱 실패 시 False (마감일 불명확 → 유지)."""
         try:
-            return datetime.strptime(end_date_str, fmt).date() < date.today()
+            return datetime.strptime(end_date_str, fmt).date() < now_kst().date()
         except (ValueError, TypeError):
             return False
 

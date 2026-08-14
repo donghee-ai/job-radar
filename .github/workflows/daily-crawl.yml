@@ -2,7 +2,7 @@ name: Daily Auto Crawl
 
 on:
   schedule:
-    - cron: "0 0 * * *"  # 매일 09:00 KST
+    - cron: "7 19 * * *"  # 매일 04:07 KST (= 전날 19:07 UTC)
   workflow_dispatch:
 
 permissions:
@@ -18,6 +18,8 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 아래 git pull --rebase 에 전체 히스토리가 필요
 
       - name: Check if schedule is enabled
         id: check
@@ -51,11 +53,16 @@ jobs:
         if: steps.check.outputs.enabled == 'True'
         run: python main.py
 
+      # 일부 크롤러가 실패해도(main.py 종료코드 1) 수집된 데이터는 반영한다.
+      # 실패 사실은 'Run crawler' 스텝이 빨간불로 남아 알림으로 전달된다.
       - name: Commit and push results
-        if: steps.check.outputs.enabled == 'True'
+        if: always() && steps.check.outputs.enabled == 'True'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -f docs/data/jobs.json config.json
-          git diff --staged --quiet || git commit -m "🔄 Daily crawl $(date +'%Y-%m-%d')"
+          git diff --staged --quiet || git commit -m "🔄 Daily crawl $(TZ=Asia/Seoul date +'%Y-%m-%d')"
+          # 크롤 도중 사람이 푸시했을 수 있다. rebase 없이는 그대로 거부되고
+          # 그날 수집분이 통째로 유실된다.
+          git pull --rebase origin main
           git push

@@ -10,10 +10,9 @@ sys.stdout.reconfigure(encoding='utf-8')
 sys.stderr.reconfigure(encoding='utf-8')
 
 import json
-from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
-from crawlers import get_all_crawlers
+from crawlers import get_all_crawlers, now_utc
 
 load_dotenv()
 
@@ -59,15 +58,21 @@ def run(targets=None, force_all=False):
 
     if not selected:
         print("❌ 실행할 크롤러가 없습니다. config.json을 확인하세요.")
-        return
+        return []
 
-    # 부분 실행이면 기존 데이터를 보존하고 해당 회사 항목만 교체
+    # 기존 데이터는 항상 읽는다 — 부분 실행 병합과 크롤 실패 폴백 양쪽에 쓰인다
     is_partial = bool(targets) and not force_all
-    existing = load_existing(OUTPUT_PATH) if is_partial else {"jobs": [], "results": {}}
+    existing = load_existing(OUTPUT_PATH)
+    existing_jobs = existing.get("jobs", [])
+    existing_results = existing.get("results", {})
     selected_companies = {crawlers[n].company for n in selected}
 
-    carry_jobs = [j for j in existing.get("jobs", []) if j.get("company") not in selected_companies]
-    carry_results = {k: v for k, v in existing.get("results", {}).items() if k not in selected}
+    # 부분 실행이면 선택되지 않은 회사의 기존 항목을 그대로 넘긴다
+    if is_partial:
+        carry_jobs = [j for j in existing_jobs if j.get("company") not in selected_companies]
+        carry_results = {k: v for k, v in existing_results.items() if k not in selected}
+    else:
+        carry_jobs, carry_results = [], {}
 
     print(f"\n{'='*50}")
     print(f"🚀 크롤링 시작 ({len(selected)}개)" + (" [병합 모드]" if is_partial else ""))
@@ -75,24 +80,35 @@ def run(targets=None, force_all=False):
 
     new_jobs = []
     new_results = {}
+    degraded = []
 
     for name in selected:
         crawler = crawlers[name]
         print(f"▶ {name}...")
         try:
             jobs = crawler.fetch_jobs()
-            new_jobs.extend(jobs)
-            new_results[name] = len(jobs)
-            print(f"  ✅ {len(jobs)}건\n")
         except Exception as e:
-            new_results[name] = 0
-            print(f"  ❌ Error: {e}\n")
+            jobs = []
+            print(f"  ❌ Error: {e}")
+
+        # 직전에 공고가 있었는데 0건이면 사이트가 빈 게 아니라 크롤이 실패한 것으로 본다.
+        # 전체 교체 방식이라 그냥 두면 일시적 타임아웃 한 번에 그 회사 공고가 통째로 사라진다.
+        prev_count = existing_results.get(name, 0)
+        if not jobs and prev_count > 0:
+            jobs = [j for j in existing_jobs if j.get("company") == crawler.company]
+            degraded.append(name)
+            print(f"  ⚠️  0건 (직전 {prev_count}건) — 크롤 실패로 보고 이전 {len(jobs)}건 유지\n")
+        else:
+            print(f"  ✅ {len(jobs)}건\n")
+
+        new_jobs.extend(jobs)
+        new_results[name] = len(jobs)
 
     all_jobs = carry_jobs + new_jobs
     all_results = {**carry_results, **new_results}
 
     output = {
-        "updated_at": datetime.now().isoformat(),
+        "updated_at": now_utc().isoformat(),
         "total": len(all_jobs),
         "results": all_results,
         "jobs": all_jobs
@@ -104,20 +120,28 @@ def run(targets=None, force_all=False):
 
     if "schedule" not in config:
         config["schedule"] = {}
-    config["schedule"]["last_updated"] = datetime.now().isoformat()
+    config["schedule"]["last_updated"] = now_utc().isoformat()
     save_config(config)
 
     print(f"{'='*50}")
     print(f"✨ 완료! 총 {len(all_jobs)}개 채용공고 (신규 {len(new_jobs)}개)")
     print(f"📁 저장 위치: {OUTPUT_PATH}")
+    if degraded:
+        print(f"⚠️  이전 데이터로 대체됨: {', '.join(degraded)} — 크롤러 점검 필요")
     print(f"{'='*50}\n")
+
+    return degraded
 
 
 if __name__ == "__main__":
     args = sys.argv[1:]
     if "--all" in args:
-        run(force_all=True)
+        degraded = run(force_all=True)
     elif args:
-        run(targets=args)
+        degraded = run(targets=args)
     else:
-        run()
+        degraded = run()
+
+    # 데이터는 이미 저장됐지만 실패를 눈에 띄게 하려고 종료 코드로 알린다.
+    # 워크플로는 커밋/푸시를 always()로 돌리므로 정상 데이터는 그대로 반영된다.
+    sys.exit(1 if degraded else 0)

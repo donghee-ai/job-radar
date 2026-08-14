@@ -15,6 +15,15 @@ const ROLE_COLOR = {
     '기타':           'role-etc',
 };
 
+// 표시 시각은 보는 사람의 위치와 무관하게 항상 한국 시간(KST) 기준
+const KST = 'Asia/Seoul';
+const KST_DATETIME_FMT = {
+    timeZone: KST,
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+};
+const KST_DATE_FMT = { timeZone: KST, month: 'short', day: 'numeric' };
+
 async function load() {
     try {
         const res = await fetch('data/jobs.json?t=' + Date.now());
@@ -31,11 +40,9 @@ async function load() {
 }
 
 function renderHeader(data) {
-    const updated = data.updated_at
-        ? new Date(data.updated_at).toLocaleString('ko-KR', {
-            year: 'numeric', month: 'short', day: 'numeric',
-            hour: '2-digit', minute: '2-digit'
-          })
+    const updatedAt = parseDate(data.updated_at);
+    const updated = updatedAt
+        ? `${updatedAt.toLocaleString('ko-KR', KST_DATETIME_FMT)} KST`
         : '데이터 없음';
     document.getElementById('updated').textContent = `최근 업데이트: ${updated}`;
 
@@ -133,7 +140,14 @@ function renderFilters() {
 
 function parseDate(str) {
     if (!str) return null;
-    const d = new Date(str);
+    // 신규 데이터는 +09:00(KST)이 붙어 온다. 오프셋 없는 과거 데이터는
+    // UTC로 기록된 값이므로 'Z'를 붙여 준다 — 안 붙이면 JS가 브라우저
+    // 로컬 시간으로 해석해 한국에서는 9시간 이르게 표시된다.
+    let s = str;
+    if (/^\d{4}-\d{2}-\d{2}T/.test(s) && !/(Z|[+-]\d{2}:?\d{2})$/.test(s)) {
+        s += 'Z';
+    }
+    const d = new Date(s);
     return isNaN(d.getTime()) ? null : d;
 }
 
@@ -195,9 +209,9 @@ function render() {
         const crawledDate = parseDate(j.crawled_at);
         let dateLabel = '';
         if (postedDate) {
-            dateLabel = postedDate.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+            dateLabel = postedDate.toLocaleDateString('ko-KR', KST_DATE_FMT);
         } else if (crawledDate) {
-            dateLabel = `수집 ${crawledDate.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}`;
+            dateLabel = `수집 ${crawledDate.toLocaleDateString('ko-KR', KST_DATE_FMT)}`;
         }
 
         // 위치: 없으면 '정보 없음'

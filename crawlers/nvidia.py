@@ -26,8 +26,8 @@
 # ============================================================
 
 import re
-from datetime import datetime, timedelta
-from .base import BaseCrawler
+from datetime import timedelta
+from .base import BaseCrawler, now_kst
 
 
 def _parse_workday_date(posted_on: str) -> str:
@@ -37,7 +37,7 @@ def _parse_workday_date(posted_on: str) -> str:
     m = re.search(r'Posted\s+(\d+)\+?\s+Days?\s+Ago', posted_on, re.IGNORECASE)
     if m:
         days = int(m.group(1))
-        return (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+        return (now_kst() - timedelta(days=days)).strftime('%Y-%m-%d')
     return ""
 
 

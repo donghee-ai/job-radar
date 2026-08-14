@@ -36,8 +36,17 @@
 #      "Agree" 클릭 전에는 job 카드가 1개만 DOM에 그려지고 나머지 33개는 렌더링 보류.
 #      팝업을 닫아야 전체 목록이 완전히 렌더링됨.
 #
+# 6. wait_until="networkidle" 로 페이지 로드 대기
+#    → Google 채용 페이지는 애널리틱스/롱폴링이 계속 붙어 networkidle에
+#      도달하지 못하는 경우가 있음. CI 러너에서 간헐적으로 30초 타임아웃 →
+#      예외가 잡혀 0건 반환 (2026-08-14 실제 발생, 그날 Google 공고 전멸).
+#      NVIDIA에서 이미 같은 유형을 겪고 고친 적 있음(premature networkidle).
+#    → domcontentloaded로 바꾸고, 렌더링 완료 판정은 아래 wait_for_selector에 맡김.
+#
 # [현재 방식]
 # - 쿠키 팝업 자동 클릭 (없으면 스킵, TimeoutError 무시)
+# - wait_until="domcontentloaded" + wait_for_selector 조합
+#   (networkidle처럼 '네트워크가 조용해질 때까지'를 기다리지 않음)
 # - wait_selector: 'a[href*="/jobs/results/"]' — 클래스 난독화와 무관하게 안정적
 #   (1개라도 매칭되면 페이지 렌더링 완료로 간주)
 # - page.evaluate()로 JS 컨텍스트에서 a.href 프로퍼티 기준 필터링
@@ -63,12 +72,11 @@ class GoogleCrawler(BaseCrawler):
                 browser = p.chromium.launch(headless=True)
                 ctx = browser.new_context(user_agent=self.headers['User-Agent'])
                 pg = ctx.new_page()
-                pg.goto(self.url, wait_until="networkidle", timeout=30000)
+                pg.goto(self.url, wait_until="domcontentloaded", timeout=30000)
 
                 # 쿠키 동의 팝업 처리
                 try:
                     pg.click('button:has-text("Agree")', timeout=4000)
-                    pg.wait_for_load_state("networkidle")
                 except PWTimeout:
                     pass
 
@@ -110,7 +118,7 @@ class GoogleCrawler(BaseCrawler):
                     if not next_href:
                         break
 
-                    pg.goto(next_href, wait_until="networkidle", timeout=30000)
+                    pg.goto(next_href, wait_until="domcontentloaded", timeout=30000)
 
                 browser.close()
         except Exception as e:
