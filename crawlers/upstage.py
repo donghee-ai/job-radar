@@ -20,10 +20,28 @@
 # 공고 링크 패턴: /ko/o/{숫자id}
 # BeautifulSoup으로 해당 패턴의 a 태그를 파싱해 제목과 URL 추출.
 # 확인 기준 45개 공고.
+#
+# a 태그 전체 텍스트에는 제목 뒤에 부문·직군·직무·경력·고용형태가 붙어 있어
+# ("...EngineerUpstageTechSoftware Engineering경력 무관정규직") 제목은
+# [data-variant="title-01"], 나머지는 data-testid="공고리스트_subtext_*"에서 따로 뽑는다.
 # ============================================================
 
 from bs4 import BeautifulSoup
 from .base import BaseCrawler
+
+
+def _parse_card(a):
+    """(제목, 부서, 태그 목록)"""
+    title_el = a.select_one('[data-variant="title-01"]')
+    if not title_el:
+        return a.get_text(" ", strip=True), "", []
+    sub = {}
+    for el in a.select('[data-testid^="공고리스트_subtext_"]'):
+        key = el["data-testid"].rsplit("_", 1)[-1]
+        sub[key] = el.get_text(" ", strip=True)
+    department = sub.get("직무") or sub.get("직군", "")
+    tags = [v for k, v in sub.items() if k not in ("부문",) and v]
+    return title_el.get_text(" ", strip=True), department, tags
 
 
 class UpstageCrawler(BaseCrawler):
@@ -43,9 +61,11 @@ class UpstageCrawler(BaseCrawler):
             if not href or href in seen:
                 continue
             seen.add(href)
-            title = a.get_text(strip=True)
+            title, department, tags = _parse_card(a)
             if not title:
                 continue
             full_url = "https://careers.upstage.ai" + href if href.startswith("/") else href
-            jobs.append(self.format_job(title=title, url=full_url))
+            jobs.append(self.format_job(title=title, url=full_url, department=department, tags=tags))
+        if not jobs:
+            self.warn("페이지는 열렸지만 공고 링크(/ko/o/...)를 하나도 못 찾음 — 페이지 구조 변경 가능성")
         return jobs

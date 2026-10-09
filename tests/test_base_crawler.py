@@ -47,7 +47,7 @@ class TestFormatJob:
 
     def test_dev_role_classified(self):
         job = self.crawler.format_job("Software Engineer", "https://example.com")
-        assert job["role"] == "개발"
+        assert job["role"] == "소프트웨어 개발"
 
     def test_optional_fields(self):
         job = self.crawler.format_job(

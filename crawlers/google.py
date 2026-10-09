@@ -52,6 +52,13 @@
 # - page.evaluate()로 JS 컨텍스트에서 a.href 프로퍼티 기준 필터링
 #   (항상 full URL 반환 → 절대경로로 저장된 링크도 전부 캡처)
 # - 페이지네이션: aria-label="Go to next page" 링크의 href (?page=N) 로 URL 이동
+# - 직함은 카드(li)의 h3 → 링크 aria-label("Learn more about ...") → URL slug 순으로 사용.
+#   slug는 소문자·구두점이 사라져 "Head Of Youtube Music Partnerships English Korean"처럼 깨진다.
+# - 근무지는 카드의 place 아이콘 옆 텍스트, 경력 레벨(Early/Mid/Advanced)은 tags로 남긴다.
+#
+# 7. GitHub Actions 러너에서만 0건 (2026-10-07~). 로컬에서는 정상 20건.
+#    대기 셀렉터가 타임아웃되면 조용히 break 하던 탓에 러너가 무슨 페이지를 받았는지
+#    로그에 남지 않았음 → 타임아웃 시 URL·제목·본문 앞부분을 출력하도록 함.
 # ============================================================
 
 from .base import BaseCrawler
@@ -85,26 +92,51 @@ class GoogleCrawler(BaseCrawler):
                     try:
                         pg.wait_for_selector('a[href*="/jobs/results/"]', timeout=10000)
                     except PWTimeout:
+                        if not jobs:
+                            self._log_page_state(pg)
                         break
 
                     # a.href 프로퍼티(항상 full URL)로 필터링.
                     # querySelectorAll('a[href*=...]') CSS 속성 셀렉터는 HTML에 저장된
                     # 상대경로 기준이라 절대경로로 저장된 Google 링크 대부분을 놓침.
-                    raw = pg.evaluate("""() => [...new Set(
-                        [...document.querySelectorAll('a')]
-                            .map(a => a.href)
-                            .filter(h => h.includes('/jobs/results/') && /\\/\\d/.test(h))
-                    )]""")
+                    cards = pg.evaluate(r"""() => {
+                        const out = [], seen = new Set();
+                        for (const a of document.querySelectorAll('a')) {
+                            const h = a.href;
+                            if (!h.includes('/jobs/results/') || !/\/\d/.test(h) || seen.has(h)) continue;
+                            seen.add(h);
+                            const li = a.closest('li');
+                            const h3 = li && li.querySelector('h3');
+                            const aria = (a.getAttribute('aria-label') || '').replace(/^Learn more about\s*/i, '');
+                            let loc = '';
+                            if (li) {
+                                const icon = [...li.querySelectorAll('i')].find(i => i.textContent.trim() === 'place');
+                                if (icon && icon.nextElementSibling) loc = icon.nextElementSibling.textContent.trim();
+                            }
+                            const level = li && li.querySelector('button[aria-label*="experience" i] span span');
+                            out.push({href: h, title: (h3 && h3.innerText.trim()) || aria,
+                                      location: loc, level: level ? level.textContent.trim() : ''});
+                        }
+                        return out;
+                    }""")
 
                     new_count = 0
-                    for href in raw:
+                    for card in cards:
+                        href = card["href"]
                         if href in seen:
                             continue
                         seen.add(href)
-                        # URL의 slug 부분에서 직무명 추출: .../results/123-software-engineer?...
-                        slug = href.split("/jobs/results/")[-1].split("?")[0]
-                        title = " ".join(slug.split("-")[1:]).title() if "-" in slug else slug
-                        jobs.append(self.format_job(title=title, url=href, location="South Korea"))
+                        title = card["title"]
+                        if not title:
+                            # URL의 slug 부분에서 직무명 추출: .../results/123-software-engineer?...
+                            slug = href.split("/jobs/results/")[-1].split("?")[0]
+                            title = " ".join(slug.split("-")[1:]).title() if "-" in slug else slug
+                        level = card["level"]
+                        jobs.append(self.format_job(
+                            title=title, url=href,
+                            location=card["location"] or "South Korea",
+                            tags=[level] if level else None,
+                        ))
                         new_count += 1
 
                     if new_count == 0:
@@ -122,6 +154,15 @@ class GoogleCrawler(BaseCrawler):
 
                 browser.close()
         except Exception as e:
-            print(f"  ⚠️  [Google] Playwright error: {e}")
+            self.warn(f"브라우저 로딩 실패: {str(e).splitlines()[0]}")
 
         return jobs
+
+    def _log_page_state(self, pg):
+        """공고 링크가 안 보일 때 러너가 실제로 받은 페이지를 원인으로 남긴다 (CI 원인 파악용)."""
+        try:
+            body = pg.evaluate("() => document.body ? document.body.innerText.slice(0, 300) : ''")
+            self.warn(f"공고 링크가 안 보임 — 받은 페이지: 제목 {pg.title()!r}, 주소 {pg.url}, "
+                      f"본문 앞부분 {' '.join(body.split())[:200]!r}")
+        except Exception as e:
+            self.warn(f"공고 링크가 안 보이고 페이지 상태도 읽지 못함: {e}")

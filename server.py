@@ -7,6 +7,10 @@ import http.server
 import socketserver
 import webbrowser
 import os
+import sys
+
+# Windows 기본 콘솔(cp949)은 이모지를 못 찍어 시작하자마자 죽는다 — main.py와 동일하게 처리
+sys.stdout.reconfigure(encoding='utf-8')
 
 PORT = 8000
 DIRECTORY = "docs"
@@ -21,8 +25,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             super().log_message(format, *args)
 
 
-class ReusableTCPServer(socketserver.TCPServer):
+class ReusableTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+    # 단일 스레드면 브라우저가 열어 둔 연결 하나에 이후 요청이 전부 막혀 페이지가 멈춘다
     allow_reuse_address = True
+    daemon_threads = True
 
 
 if __name__ == "__main__":

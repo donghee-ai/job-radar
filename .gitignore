@@ -16,3 +16,6 @@ __pycache__/
 
 # 로그
 *.log
+# 가상환경
+venv/
+.venv/

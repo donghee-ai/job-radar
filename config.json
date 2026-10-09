@@ -2,7 +2,7 @@
   "schedule": {
     "enabled": true,
     "interval": "daily",
-    "last_updated": "2026-10-08T23:46:24.965438+00:00"
+    "last_updated": "2026-10-09T16:26:56.445286+00:00"
   },
   "crawlers": {
     "NVIDIA": true,
@@ -12,6 +12,23 @@
     "Samsung": true,
     "Naver": true,
     "Toss": true,
-    "Upstage": true
+    "Upstage": true,
+    "LG AI연구원": true,
+    "LG전자": true,
+    "SK하이닉스": true,
+    "42dot": true,
+    "Boston Dynamics": true,
+    "Figure AI": true,
+    "1X": true,
+    "Physical Intelligence": true,
+    "Skild AI": true,
+    "Agility Robotics": true,
+    "Waymo": true,
+    "Wayve": true,
+    "Motional": true,
+    "Qualcomm": true,
+    "Intel": true,
+    "AMD": true,
+    "MediaTek": true
   }
 }

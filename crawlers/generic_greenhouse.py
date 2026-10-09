@@ -25,6 +25,12 @@
 #
 # [현재 등록 회사]
 # - Anthropic: board token `anthropic` (400개+ 공고 확인)
+# - 피지컬 AI (2026-10 추가, 전체 공고 수집):
+#   Figure AI `figureai`, Skild AI `skildai-careers`, Agility Robotics `agilityrobotics`,
+#   Waymo `waymo`, Motional `motional` (현대차그룹 합작)
+# - LG AI연구원 `lgairesearch` — lgresearch.ai 채용 목록 API의 greenId 필드로 확인
+#   (자체 API보다 Greenhouse 쪽 필드가 정돈돼 있어 이쪽을 사용)
+# - absolute_url이 회사 자체 사이트로 향하는 보드가 있음(Agility, Skild) → 가공 없이 그대로 사용
 # ============================================================
 
 from .base import BaseCrawler
@@ -33,6 +39,12 @@ from .base import BaseCrawler
 class GreenhouseCrawler(BaseCrawler):
     BOARDS = {
         "Anthropic": ("anthropic", "외국계"),
+        "Figure AI": ("figureai", "외국계"),
+        "Skild AI": ("skildai-careers", "외국계"),
+        "Agility Robotics": ("agilityrobotics", "외국계"),
+        "Waymo": ("waymo", "외국계"),
+        "Motional": ("motional", "외국계"),
+        "LG AI연구원": ("lgairesearch", "대기업"),
     }
 
     def __init__(self, company: str):
@@ -56,5 +68,5 @@ class GreenhouseCrawler(BaseCrawler):
                         posted_date=item.get("first_published", "") or item.get("updated_at", "")
                     ))
             except Exception as e:
-                print(f"  ⚠️  {self.company} error: {e}")
+                self.warn(f"응답 형식이 예상과 다름: {type(e).__name__}: {e}")
         return jobs

@@ -23,6 +23,10 @@ from .base import BaseCrawler
 class AshbyCrawler(BaseCrawler):
     BOARDS = {
         "OpenAI": ("openai", "외국계"),
+        "42dot": ("42dot", "대기업"),               # 현대차그룹 SDV·자율주행
+        "1X": ("1x", "외국계"),                     # 휴머노이드
+        "Physical Intelligence": ("physicalintelligence", "외국계"),
+        "Wayve": ("wayve", "외국계"),               # 자율주행 (end-to-end)
     }
 
     def __init__(self, company: str):
@@ -50,5 +54,5 @@ class AshbyCrawler(BaseCrawler):
                         posted_date=item.get("publishedAt", "")
                     ))
             except Exception as e:
-                print(f"  ⚠️  {self.company} error: {e}")
+                self.warn(f"응답 형식이 예상과 다름: {type(e).__name__}: {e}")
         return jobs

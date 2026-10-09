@@ -32,15 +32,20 @@ job-radar/
 ├── crawlers/
 │   ├── __init__.py          # Crawler registry (get_all_crawlers)
 │   ├── base.py              # BaseCrawler abstract class
-│   ├── classifier.py        # Role classifier (keywords + transformer)
+│   ├── classifier.py        # Role classifier (weighted title rules)
+│   ├── enrich.py            # Post-processing: role, seniority, regions, first_seen
 │   ├── google.py            # Google — Playwright + JS evaluate
 │   ├── nvidia.py            # NVIDIA — Playwright XHR interception
 │   ├── samsung.py           # Samsung — Playwright + conditional waits
 │   ├── naver.py             # Naver — internal AJAX API
 │   ├── toss.py              # Toss — Playwright (Next.js)
 │   ├── upstage.py           # Upstage — Requests + BeautifulSoup
-│   ├── generic_greenhouse.py # Shared Greenhouse ATS crawler
-│   └── generic_ashby.py     # Shared Ashby ATS crawler
+│   ├── generic_greenhouse.py # Shared Greenhouse ATS crawler (Anthropic, Figure AI, Waymo, …)
+│   ├── generic_ashby.py     # Shared Ashby ATS crawler (OpenAI, 42dot, 1X, …)
+│   ├── generic_lever.py     # Shared Lever ATS crawler
+│   ├── generic_workday.py   # Shared Workday JSON crawler (Boston Dynamics, Intel)
+│   ├── qualcomm.py / amd.py / mediatek.py   # On-device AI silicon, Korea-only
+│   └── lg.py / sk.py        # Korean conglomerate group career APIs
 ├── docs/                    # Static web UI (GitHub Pages)
 │   ├── index.html
 │   ├── style.css
@@ -49,7 +54,8 @@ job-radar/
 │       └── jobs.json        # Crawl output (auto-generated)
 ├── .github/workflows/
 │   └── daily-crawl.yml      # GitHub Actions workflow (daily 09:00 KST)
-├── main.py                  # Crawler entry point
+├── tests/data/role_*.tsv    # Labeled titles for classifier evaluation
+├── main.py                  # Crawler entry point (+ --reclassify)
 ├── server.py                # Local dev server
 ├── toggle_schedule.py       # Toggle GitHub Actions schedule on/off
 ├── config.json              # Crawler enablement
@@ -87,7 +93,7 @@ job-radar/
                        ▼
               crawlers/classifier.py
               title → role classification
-              (keywords → transformer)
+              (weighted rules → enrich)
                        │
                        ▼
               docs/data/jobs.json
@@ -101,7 +107,7 @@ job-radar/
 
 - **Template Method**: `BaseCrawler` provides shared infrastructure; subclasses only implement `fetch_jobs()`.
 - **Factory**: `get_all_crawlers()` returns a dict of crawler instances.
-- **Singleton**: The transformer model in `classifier.py` is loaded once per process.
+- **Single pass**: Classification and enrichment run once in `main.py` over all postings, cached per title.
 
 ---
 
@@ -192,68 +198,71 @@ page.on("response", handler)  ← register a response listener
 ```
 
 **Why this approach**
-Hitting the Workday API directly with POST returns 400 because of missing CSRF tokens and session cookies. Letting the browser load the page establishes the session automatically, bypassing the block; and since we just intercept the API calls the browser already makes, there's no need to reverse-engineer the API contract.
+The Workday page loads its listings through an internal API. Letting the browser load the page handles the session and CSRF token automatically, and since we just read the API responses the browser already receives, there's no need to reverse-engineer the API contract.
 
 | Pros                                      | Cons                                              |
 | ----------------------------------------- | ------------------------------------------------- |
-| Bypasses bot blocks (400)                 | Depends on Playwright                             |
-| Works without knowing the API spec        | Could be re-blocked if responses become encrypted |
+| No manual session/CSRF handling           | Depends on Playwright                             |
+| Works without knowing the API spec        | Breaks if the internal API format changes         |
 | Handles sessions and CSRF automatically   | Has to wait for the page to load                  |
 
 ---
 
 ## 5. Role Classification
 
-**File**: `crawlers/classifier.py`
+**Files**: `crawlers/classifier.py`, `crawlers/enrich.py`
 
-Each posting's `title` is automatically mapped to one of 7 role categories.
+Classification runs once at the end of `main.py` (`enrich_jobs`) over every posting, including
+postings carried over from a failed crawl, so a rule change re-labels the whole dataset on the next run
+(or immediately with `python main.py --reclassify`).
+
+**Taxonomy: 4 families, 16 roles (+ Other)**
+
+| Family | Roles |
+| ------ | ----- |
+| Engineering | AI / ML · Software · Data · Hardware / Semiconductor · Robotics / Autonomy · Manufacturing / Quality · Security |
+| Product & Design | Product / Planning · Design |
+| Business | Sales / BD · Solutions / Customer Support · Marketing / PR |
+| Operations & Support | Operations / Strategy · Risk / Compliance · Legal / Policy · G&A |
+
+**Pipeline (weighted rules)**
 
 ```
-title input
+title (+ department, + site tags)
    │
-   ▼
-[Step 1] Keyword matching
-   │  Search KEYWORD_MAP per category in priority order
-   │  Return immediately on match
-   │ no match
-   ▼
-[Step 2] Transformer embedding similarity (zero-shot)
-   │  Model: paraphrase-multilingual-MiniLM-L12-v2 (~420MB)
-   │  Supports Korean + English; runs on CPU
-   │
-   │  1. Embed anchor sentences per category up-front
-   │  2. Compute cosine similarity against the title embedding
-   │  3. Pick the highest-similarity category
-   │
-   ├── similarity ≥ 0.28 → return that category
-   └── similarity < 0.28 → "Other"
+   ▼  normalize   NFKC, lowercase, drop "[NAVER]" prefixes and "(경력)", "(~10/11)" meta
+   ▼  split       head = segment before "," / " - " / "|"   (English titles: the head names the job)
+   │              generic heads ("Senior Manager, …") or heads without a job cue are skipped
+   ▼  match       ~600 weighted patterns; English uses word boundaries ("ios" ≠ "scenarios"),
+   │              Korean uses substrings; longer phrases carry more weight
+   ▼  score       head ×1.0 (+0.5 if the match ends the head: the head noun),
+   │              rest ×0.5 (domain words like robotics ×0.8), department ×0.6, tags ×0.4
+   │              role score = best match + 0.3 × other matches; ties → ROLE_PRIORITY
+   ▼  decide      score ≥ 1.5 → role · 1.0–1.5 → role (weak) · else → Other
 ```
 
-**Keyword check order (priority)**
+An embedding fallback (multilingual MiniLM, kNN over example titles) is still in the code but **off by default**
+(`JOB_RADAR_EMBEDDING=1` to enable). On the held-out set it added no accuracy (87.3% with and without) while
+guessing badly on low-confidence titles, and it cost CI a torch install plus a 420 MB model download per run.
 
-```
-AI/ML → Security → Sales/BD → Marketing → Product/Planning → Operations → Engineering
-```
+**Evaluation**
 
-Order matters: "Security Engineer" must be checked under Security before Engineering, or it would be misclassified. Likewise "ML Engineer" needs AI/ML to come before Engineering.
+| Set | Rows | Purpose |
+| --- | ---- | ------- |
+| `tests/data/role_gold.tsv` | 195 | Titles used while writing rules: regression guard (≥ 97% in tests) |
+| `tests/data/role_holdout.tsv` | 79 | Random sample labeled *before* looking at predictions: generalization |
 
-**Performance** (1,448 postings)
+Held-out accuracy: previous keyword-priority classifier 65.8% (scored leniently against its coarser 7 categories),
+new rules 87.3% on first run. Remaining misses are genuinely ambiguous titles (e.g. "Applied AI Engineer" in a
+go-to-market team). Do not tune rules against the held-out file, or it stops being held out.
 
-- "Other" rate: under ~1%
-- Initial model load: ~3s (then cached, no reload)
-- Inference throughput: ~1,000 titles/sec on CPU
+**Other derived fields** (`enrich.py`)
 
-**7 role categories**
-
-| Category              | Representative titles                                |
-| --------------------- | ---------------------------------------------------- |
-| Engineering           | Software Engineer, Backend, Frontend, DevOps, SRE    |
-| AI / ML               | Research Scientist, ML Engineer, Data Scientist, LLM |
-| Security              | Security Engineer, AML, Compliance, KYC, SOX         |
-| Sales / BD            | Account Executive, Sales, Business Development, GTM  |
-| Marketing             | Marketing Manager, PR, Communications                |
-| Product / Planning    | Product Manager, Program Manager, Designer, UX       |
-| Operations / G&A      | Operations, Finance, HR, Legal, Administrative       |
+- `seniority`: 인턴 / 신입·주니어 / 경력 / 시니어 / 리더, from the title first, then site level tags (Google Early/Mid/Advanced, Upstage "경력 3년 이상")
+- `employment`: 계약직 when the title or tags say contract / fixed-term / 계약
+- `pool`: true for talent-pool / expression-of-interest posts (real listings, but not a specific opening)
+- `regions`: 한국 / 북미 / 유럽 / 아시아·태평양 / 원격 / 기타 from the free-text location
+- `first_seen`: carried over by URL from the previous `jobs.json`; a company newly added to the tracker gets an empty baseline instead of "new today"
 
 ---
 
@@ -265,10 +274,18 @@ Order matters: "Security Engineer" must be checked under Security before Enginee
 | OpenAI    | Ashby REST API            | None                                | Drops `isListed=false`  | board_token: `openai`                                  |
 | Naver     | Internal AJAX JSON API    | `firstIndex` parameter              | Drops `endYmd < today`  | Total pages computed from the `totalRows` JS variable  |
 | Google    | Playwright + JS evaluate  | Clicks `aria-label="Go to next page"` | None                  | Has to click the cookie banner first                   |
-| NVIDIA    | Playwright XHR intercept  | None (initial load only)            | None                    | Bypasses Workday bot block                             |
+| NVIDIA    | Playwright XHR intercept  | None (initial load only)            | None                    | Workday internal API                                   |
 | Samsung   | Playwright + BS4          | None                                | None                    | Waits on `jobOpeningView`; 0 results is normal off-cycle |
 | Toss      | Playwright + BS4          | None                                | None                    | Next.js CSR; filters out nav links                     |
 | Upstage   | Requests + BS4            | None                                | None                    | Greeting HR SSR, `/ko/o/{id}` pattern                  |
+| Greenhouse boards | REST API          | None                                | —                       | Figure AI, Skild AI, Agility, Waymo, Motional, LG AI연구원 |
+| Ashby boards | REST API               | None                                | Drops `isListed=false`  | 42dot, 1X, Physical Intelligence, Wayve                |
+| Workday (generic) | JSON POST `/wday/cxs/…/jobs` | `offset` += 20 until `total` | —                     | Boston Dynamics (all), Intel (Korea via `locationsText`) |
+| Qualcomm  | Eightfold `/api/pcsx/search` | `start` += 10                 | —                       | `location=Korea`                                       |
+| AMD       | Jibe `/api/jobs`          | `page`, 100 per page                | —                       | `location=Korea`, re-checked on `full_location`        |
+| MediaTek  | tRPC `job.getJobs`        | One call (limit 1000)               | —                       | Keeps Korean sites (Seongnam)                          |
+| LG전자    | LG Careers JSON POST      | One call                            | `recEndDateTime`        | companyCode LGE, RBO (로보스타)                         |
+| SK하이닉스 | SK Careers form POST     | One call                            | `end`                   | SK hynix, SK telecom only                              |
 
 ---
 
@@ -278,37 +295,52 @@ Order matters: "Security Engineer" must be checked under Security before Enginee
 
 ```json
 {
-  "updated_at": "2026-05-01T15:20:04.123456",
-  "total": 1448,
-  "results": {
-    "Anthropic": 439,
-    "OpenAI": 667
+  "updated_at": "2026-10-09T16:26:00+00:00",
+  "total": 3086,
+  "results": { "Anthropic": 646, "OpenAI": 818 },
+  "sources": {
+    "Google": { "company": "Google", "category": "외국계", "sectors": ["AI 연구소"],
+                "count": 20, "status": "stale", "last_success": "2026-10-06" }
   },
+  "taxonomy": { "groups": { "엔지니어링": ["AI / ML", "..."] }, "levels": ["인턴", "..."], "regions": ["한국", "..."] },
   "jobs": [ ... ]
 }
 ```
+
+`sources[*].status` is `stale` when a crawler returned 0 after previously returning postings: the previous
+postings are kept and the dashboard shows a warning with `last_success`. After 7 days of continuous failure
+(`STALE_MAX_DAYS`, counted from `stale_since`) the status becomes `failed` and those postings are dropped, so
+closed jobs don't linger. A normal run replaces each company's postings wholesale, so a closed job disappears
+on the next successful crawl. `taxonomy` lets the dashboard render filters without hard-coding role names.
 
 ### Single job object
 
 ```json
 {
-  "company": "Anthropic",
-  "category": "Global",
+  "company": "42dot",
+  "category": "대기업",
   "role": "AI / ML",
-  "title": "Research Scientist",
-  "url": "https://...",
-  "location": "San Francisco, CA",
-  "department": "Research",
-  "posted_date": "2026-03-25T10:53:39-04:00",
-  "crawled_at": "2026-05-01T15:20:04.123456"
+  "role_group": "엔지니어링",
+  "title": "Deep Learning Engineer (음성 합성 개발)",
+  "url": "https://jobs.ashbyhq.com/42dot/...",
+  "location": "Pangyo (Software Dream Center), South Korea",
+  "department": "ENGINEERING",
+  "posted_date": "2026-10-02T01:12:44.000+00:00",
+  "seniority": "",
+  "employment": "",
+  "regions": ["한국"],
+  "first_seen": "",
+  "crawled_at": "2026-10-09T16:26:00+00:00"
 }
 ```
 
 | Field         | Description                                                        |
 | ------------- | ------------------------------------------------------------------ |
-| `category`    | Company bucket (Global / IT / Finance / Startup / Manufacturing)   |
-| `role`        | Role bucket (7 + Other) — assigned automatically by classifier.py  |
-| `posted_date` | Format varies per company (ISO 8601 / YYYY-MM-DD / free text)      |
+| `category`    | Company bucket (외국계 / 대기업 / IT / 금융 / 제조업 / 스타트업)       |
+| `role`, `role_group` | Role and family, assigned by `classifier.py`                |
+| `tags`        | Optional site tags (Toss tech tags, Upstage experience, Google level) |
+| `posted_date` | Format varies per company (ISO 8601 / YYYY-MM-DD)                  |
+| `first_seen`  | KST date this URL first appeared ("" = before tracking / baseline) |
 | `crawled_at`  | Collection time (always ISO 8601)                                  |
 
 ---
@@ -370,6 +402,19 @@ Daily at 00:00 UTC (09:00 KST)
 
 ---
 
+### Failure reporting
+
+When a company comes back empty, the run says *why* in three places:
+
+- **Data / dashboard**: `sources[name].error` holds the reason (an HTTP status with a hint such as "429 rate limit",
+  a browser load error, "page loaded but no job links: page title …", a crawler exception, or
+  "0 with no error recorded"). The dashboard's warning banner shows it.
+- **Console**: a "수집 문제 요약" table at the end of every run, including sharp drops (more than 50% fewer postings than last time).
+- **GitHub Actions**: `::error` / `::warning` annotations at the top of the run page, plus a per-company status
+  table in the job summary. The crawl step still exits 1 so the run turns red.
+
+Crawlers report problems through `BaseCrawler.warn()` rather than `print`, so a failure is never silent.
+
 ## 10. Adding a New Crawler
 
 ### Step 1 — Create the crawler file
@@ -429,4 +474,4 @@ def get_all_crawlers():
 | Greenhouse / Ashby / Lever ATS  | Add the board_token to `generic_greenhouse.py` or `generic_ashby.py`   |
 | SSR (server-rendered)           | `safe_request()` + BeautifulSoup                                       |
 | CSR / SPA (React, Next.js)      | `playwright_fetch()`                                                   |
-| API that blocks bots            | `playwright_intercept()`                                               |
+| SPA backed by an internal API   | `playwright_intercept()`                                               |

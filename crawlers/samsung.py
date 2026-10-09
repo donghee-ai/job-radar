@@ -85,11 +85,13 @@ class SamsungCrawler(BaseCrawler):
                 try:
                     page.wait_for_selector("ul.job#list li a[data-value]", timeout=10000)
                 except PWTimeout:
-                    pass
+                    # 모집 없는 시즌에는 정상이라 실패로 기록하지 않는다.
+                    # 구조가 깨진 경우는 main.py의 '직전에 있었는데 0건' 규칙이 잡는다.
+                    print("  ℹ️  [Samsung] 공고 카드 없음 — 모집 없는 시즌일 수 있음")
 
                 content = page.content()
                 browser.close()
                 return content
         except Exception as e:
-            print(f"  ⚠️  [Samsung] Playwright error: {e}")
+            self.warn(f"브라우저 로딩 실패: {str(e).splitlines()[0]}")
             return ""

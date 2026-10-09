@@ -71,7 +71,7 @@ class NaverCrawler(BaseCrawler):
             try:
                 data = resp.json()
             except Exception as e:
-                print(f"  ⚠️  [Naver] JSON 파싱 오류: {e}")
+                self.warn(f"응답이 JSON이 아님 (페이지 구조 변경 가능성): {e}")
                 break
 
             items = data.get("list", [])

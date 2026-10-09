@@ -3,66 +3,114 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' https://cdn.jsdelivr.net; font-src https://cdn.jsdelivr.net; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none';">
 <meta name="referrer" content="strict-origin-when-cross-origin">
+<meta name="description" content="관심 회사의 채용공고를 매일 모아 직무·연차·근무지로 걸러 보는 개인용 대시보드">
 <title>Job Radar</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="app">
-    <header class="header">
-        <div class="header-content">
-            <div class="brand">
-                <div class="logo">JR</div>
-                <div>
-                    <h1>Job Radar</h1>
-                    <p class="subtitle" id="updated">데이터 로딩 중...</p>
-                </div>
-            </div>
-            <div class="header-stats" id="header-stats"></div>
-        </div>
-    </header>
-
-    <div class="layout">
-        <aside class="sidebar">
-            <div class="sidebar-section">
-                <h3>직무</h3>
-                <div id="role-list" class="filter-list"></div>
-            </div>
-            <div class="sidebar-section">
-                <h3>회사</h3>
-                <div id="company-list" class="filter-list"></div>
-            </div>
-        </aside>
-
-        <main class="main">
-            <div class="toolbar">
-                <div class="search-wrap">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-                    </svg>
-                    <input type="text" id="search" placeholder="직무 또는 키워드 검색...">
-                </div>
-                <div class="toolbar-right">
-                    <select id="sort" class="sort-select">
-                        <option value="latest">최신순</option>
-                        <option value="location">위치순</option>
-                    </select>
-                    <div class="result-count" id="count">0개</div>
-                </div>
-            </div>
-
-            <div id="jobs" class="job-grid"></div>
-
-            <div id="empty" class="empty hidden">
-                <div class="empty-icon">📭</div>
-                <h2>조건에 맞는 채용공고가 없습니다</h2>
-                <p>필터를 조정하거나 크롤링을 다시 실행해보세요</p>
-            </div>
-        </main>
+<header class="topbar">
+    <div class="container topbar-inner">
+        <a class="brand" href="./">
+            <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+                <circle cx="16" cy="16" r="14" class="ring"/>
+                <circle cx="16" cy="16" r="8.5" class="ring"/>
+                <path d="M16 16 L16 2 A14 14 0 0 1 28.1 9 Z" class="sweep"/>
+                <circle cx="22.5" cy="9.5" r="2" class="blip"/>
+            </svg>
+            Job Radar
+        </a>
+        <span class="updated" id="updated"></span>
+        <button type="button" class="icon-btn" id="theme-toggle" aria-label="화면 테마 바꾸기">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 1 0 9 9 7 7 0 0 1-9-9z"/></svg>
+        </button>
     </div>
-</div>
+</header>
 
+<section class="hero">
+    <svg class="hero-radar" viewBox="0 0 400 400" aria-hidden="true">
+        <circle cx="200" cy="200" r="190"/>
+        <circle cx="200" cy="200" r="140"/>
+        <circle cx="200" cy="200" r="90"/>
+        <circle cx="200" cy="200" r="40"/>
+        <path class="sweep" d="M200 200 L200 10 A190 190 0 0 1 364.5 105 Z"/>
+        <circle class="blip" cx="290" cy="120" r="7"/>
+        <circle class="blip dim" cx="120" cy="260" r="5"/>
+        <circle class="blip dim" cx="300" cy="280" r="4"/>
+    </svg>
+    <div class="container hero-inner">
+        <h1 class="hero-title" id="hero-title">채용공고를 불러오는 중이에요</h1>
+        <p class="hero-sub" id="hero-sub"></p>
+        <label class="search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input type="search" id="search" placeholder="직무명, 회사, 기술, 지역으로 검색해 보세요" autocomplete="off" aria-label="공고 검색">
+            <kbd>/</kbd>
+        </label>
+    </div>
+</section>
+
+<main class="container main">
+    <div class="alerts" id="alerts"></div>
+
+    <section class="spotlight" aria-labelledby="spotlight-title">
+        <div class="section-head">
+            <h2 id="spotlight-title">이번 주 채용이 활발한 회사</h2>
+            <span class="section-note">카드를 누르면 그 회사 공고만 보여요</span>
+            <div class="carousel-nav">
+                <span class="carousel-pos" id="carousel-pos"></span>
+                <button type="button" class="carousel-btn" id="carousel-prev" aria-label="이전 회사">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+                </button>
+                <button type="button" class="carousel-btn" id="carousel-next" aria-label="다음 회사">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="carousel" id="carousel">
+            <div class="company-strip" id="company-strip"></div>
+        </div>
+    </section>
+
+    <section class="board" aria-label="채용공고">
+        <div class="group-tabs" id="group-tabs" role="tablist" aria-label="직군"></div>
+        <div class="role-pills" id="role-pills" aria-label="직무"></div>
+
+        <div class="filter-bar">
+            <div class="filter-chips" id="filter-chips"></div>
+            <div class="sort" id="sort" role="group" aria-label="정렬">
+                <button type="button" data-sort="relevance" hidden>관련도순</button>
+                <button type="button" data-sort="recent">최신순</button>
+                <button type="button" data-sort="company">회사순</button>
+            </div>
+        </div>
+
+        <div class="result-line">
+            <p id="count" aria-live="polite"></p>
+            <button type="button" class="text-btn" id="reset" hidden>필터 초기화</button>
+        </div>
+        <p class="search-hint" id="search-hint" hidden></p>
+
+        <ul class="job-list" id="jobs"></ul>
+        <button type="button" class="more" id="more" hidden>더 보기</button>
+
+        <div class="empty" id="empty" hidden>
+            <p class="empty-title">조건에 맞는 공고가 없어요</p>
+            <p class="empty-body">필터를 줄이거나 다른 검색어로 찾아보세요.</p>
+            <button type="button" class="text-btn" id="empty-reset">필터 초기화</button>
+        </div>
+    </section>
+</main>
+
+<footer class="container foot">
+    <span>매일 오전 4시(KST)에 자동으로 모아요</span>
+    <a href="https://github.com/donghee-ai/job-radar" target="_blank" rel="noopener noreferrer">GitHub</a>
+</footer>
+
+<div class="popover" id="popover" hidden></div>
+
+<script src="search.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

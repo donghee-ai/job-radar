@@ -45,5 +45,5 @@ class LeverCrawler(BaseCrawler):
                         department=item.get("categories", {}).get("team", "")
                     ))
             except Exception as e:
-                print(f"  ⚠️  {self.company} error: {e}")
+                self.warn(f"응답 형식이 예상과 다름: {type(e).__name__}: {e}")
         return jobs
