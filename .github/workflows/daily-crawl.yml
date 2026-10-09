@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # 아래 git pull --rebase 에 전체 히스토리가 필요
 
@@ -28,7 +28,7 @@ jobs:
           echo "enabled=$ENABLED" >> $GITHUB_OUTPUT
           echo "Schedule enabled: $ENABLED"
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         if: steps.check.outputs.enabled == 'True'
         with:
           python-version: "3.11"
@@ -40,7 +40,7 @@ jobs:
 
       - name: Cache Playwright browsers
         if: steps.check.outputs.enabled == 'True'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
           key: playwright-chromium-${{ hashFiles('requirements.txt') }}

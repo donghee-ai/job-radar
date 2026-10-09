@@ -114,7 +114,7 @@ python server.py
 
 ### GitHub Actions Automation (Optional)
 
-To run the crawler automatically every day at 09:00 KST:
+To run the crawler automatically every day at 04:07 KST:
 
 ```bash
 python toggle_schedule.py on   # Enable

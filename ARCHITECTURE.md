@@ -21,7 +21,7 @@ A personal job radar that aggregates postings from multiple tech companies into 
 
 - **Backend**: Python crawlers → produces `docs/data/jobs.json`
 - **Frontend**: Plain HTML/CSS/JS static site (hosted on GitHub Pages)
-- **Automation**: GitHub Actions runs daily at 09:00 KST (optional)
+- **Automation**: GitHub Actions runs daily at 04:07 KST (optional)
 
 ---
 
@@ -53,7 +53,7 @@ job-radar/
 │   └── data/
 │       └── jobs.json        # Crawl output (auto-generated)
 ├── .github/workflows/
-│   └── daily-crawl.yml      # GitHub Actions workflow (daily 09:00 KST)
+│   └── daily-crawl.yml      # GitHub Actions workflow (daily 04:07 KST)
 ├── tests/data/role_*.tsv    # Labeled titles for classifier evaluation
 ├── main.py                  # Crawler entry point (+ --reclassify)
 ├── server.py                # Local dev server
@@ -379,7 +379,7 @@ on the next successful crawl. `taxonomy` lets the dashboard render filters witho
 **File**: `.github/workflows/daily-crawl.yml`
 
 ```
-Daily at 00:00 UTC (09:00 KST)
+Daily at 19:07 UTC (04:07 KST next day)
   → check schedule.enabled in config.json
   → only run if true:
       pip install (with pip cache)
@@ -401,6 +401,12 @@ Daily at 00:00 UTC (09:00 KST)
 **Note**: The `-f` flag on `git add` is required. `docs/data/jobs.json` is in `.gitignore`, so without `-f` it wouldn't be staged and the commit would be skipped.
 
 ---
+
+### Tests workflow
+
+`.github/workflows/tests.yml` runs `pytest` on every push to `main` (except data-only crawl commits) and on PRs.
+It includes the classifier accuracy floors (gold ≥ 97%, holdout ≥ 85%), so a rule change that breaks
+classification fails CI.
 
 ### Failure reporting
 

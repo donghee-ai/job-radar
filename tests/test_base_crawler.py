@@ -4,8 +4,8 @@ BaseCrawler 유틸리티 메서드 단위 테스트
 - is_expired: 날짜 경계 조건
 """
 import pytest
-from datetime import date, timedelta
-from crawlers.base import BaseCrawler
+from datetime import timedelta
+from crawlers.base import BaseCrawler, now_kst
 
 
 class _Dummy(BaseCrawler):
@@ -67,16 +67,18 @@ class TestIsExpired:
     def setup_method(self):
         self.crawler = _Dummy("TestCo", "개발")
 
+    # is_expired는 '한국 달력 기준 오늘'로 판단한다. date.today()(실행 머신 시간대)를 쓰면
+    # UTC인 CI 러너에서 KST 자정~09시 사이에 하루가 어긋나 실패한다.
     def test_yesterday_is_expired(self):
-        yesterday = (date.today() - timedelta(days=1)).strftime("%Y%m%d")
+        yesterday = (now_kst().date() - timedelta(days=1)).strftime("%Y%m%d")
         assert self.crawler.is_expired(yesterday) is True
 
     def test_tomorrow_is_not_expired(self):
-        tomorrow = (date.today() + timedelta(days=1)).strftime("%Y%m%d")
+        tomorrow = (now_kst().date() + timedelta(days=1)).strftime("%Y%m%d")
         assert self.crawler.is_expired(tomorrow) is False
 
     def test_today_is_not_expired(self):
-        today = date.today().strftime("%Y%m%d")
+        today = now_kst().date().strftime("%Y%m%d")
         assert self.crawler.is_expired(today) is False
 
     def test_invalid_string_returns_false(self):
