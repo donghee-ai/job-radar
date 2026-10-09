@@ -414,6 +414,7 @@ button { cursor: pointer; }
 .sort { display: flex; align-items: center; gap: 4px; font-size: 14px; }
 .sort button { border: 0; background: none; padding: 4px 6px; color: var(--ink-3); }
 .sort button + button::before { content: "·"; margin-right: 8px; color: var(--line-strong); }
+.sort button[hidden] + button::before { content: none; }  /* 숨은 관련도순 뒤에 점이 남지 않게 */
 .sort button[aria-pressed="true"] { color: var(--ink); font-weight: 700; }
 
 .result-line { display: flex; align-items: center; gap: 12px; margin: 4px 0 12px; }
