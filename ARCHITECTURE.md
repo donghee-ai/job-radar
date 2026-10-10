@@ -56,6 +56,7 @@ job-radar/
 │   └── data/jobs.json         # Crawl output (auto-generated)
 ├── tests/
 │   ├── test_classifier.py / test_enrich.py / test_main.py / test_base_crawler.py
+│   ├── test_dashboard.py      # Browser tests for docs/ (Playwright)
 │   └── data/role_gold.tsv, role_holdout.tsv   # Labeled titles for classifier evaluation
 ├── .github/workflows/
 │   ├── daily-crawl.yml        # Daily crawl at 04:07 KST, commits jobs.json
@@ -390,6 +391,20 @@ and a list of postings with company logos, colored role tags, NEW / 인재풀 ba
 All filter state lives in the URL query string, so any view can be shared. Light and dark themes are token-based;
 the toggle is remembered in `localStorage`.
 
+**Dates**: relative dates ("오늘", "3일 전"), the NEW badge (first seen today or yesterday) and "이번 주 새 공고" are
+computed against the *viewer's* current KST date, not the data's update date, so a stalled crawl never keeps old
+postings looking new. The header shows the data's own update time separately ("오늘 04:07 업데이트"), on mobile too.
+
+**Keyboard**: filter buttons are re-rendered on every change, so `update()` remembers which control had focus and
+restores it afterwards. Dropdown menus move focus to the selected (or first) item when opened, support
+↑/↓/Home/End, and close on Esc or Tab with focus returning to their chip. `/` focuses the search box.
+
+**Mobile**: the right-hand column (role tag, date) is hidden, so the role and date move into the meta line; the
+company carousel uses smaller cards so postings appear sooner.
+
+**Load failure**: visitors see "공고 정보를 불러오지 못했어요" with a retry button; the technical cause goes to the
+browser console only.
+
 **Related search** (`search.js`)
 
 1. Query words map to *concepts*: Korean/English synonyms, abbreviations and company names
@@ -474,6 +489,11 @@ The crawl step exits 1 when any company failed, so the run turns red, but the co
 `.github/workflows/tests.yml` runs `pytest` on every push to `main` (except data-only crawl commits) and on PRs.
 It includes the classifier accuracy floors (gold ≥ 97%, holdout ≥ 85%), so a rule change that breaks
 classification fails CI. Date logic is tested against KST, so the suite passes regardless of the runner's time zone.
+
+`tests/test_dashboard.py` opens the real dashboard in headless Chromium against small generated `jobs.json` files
+and checks dates (including stale data), related search, URL state, keyboard focus and menus, the mobile layout and
+the load-failure screen. Locally these tests skip if Playwright's browser isn't installed; in CI
+(`REQUIRE_BROWSER_TESTS=1`) a missing browser fails the run instead of silently skipping.
 
 ### Failure reporting
 

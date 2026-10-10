@@ -103,6 +103,7 @@ python main.py --reclassify
 python -m crawlers.classifier --eval
 
 # Run the tests (also run by GitHub Actions on every push)
+# — includes browser tests of the dashboard, which need the Playwright browser from step 4
 pip install pytest
 python -m pytest tests
 

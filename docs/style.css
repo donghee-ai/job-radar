@@ -201,6 +201,15 @@ button { cursor: pointer; }
 .hero-title em { font-style: normal; color: var(--brand); }
 .hero-sub { margin: 10px 0 24px; color: var(--ink-2); font-size: 16px; }
 .hero-sub b { color: var(--ink); font-weight: 600; }
+.retry {
+    margin-left: 6px;
+    padding: 6px 14px;
+    border: 1px solid var(--brand);
+    border-radius: 10px;
+    background: var(--brand);
+    color: var(--brand-ink);
+    font-weight: 600;
+}
 .search {
     position: relative;
     display: flex;
@@ -350,8 +359,8 @@ button { cursor: pointer; }
 }
 .group-tab .n { font-weight: 500; color: var(--ink-3); font-size: 13px; }
 .group-tab:hover { border-color: var(--ink-3); color: var(--ink); }
-.group-tab[aria-selected="true"] { background: var(--tab-on-bg); border-color: var(--tab-on-bg); color: var(--tab-on-ink); }
-.group-tab[aria-selected="true"] .n { color: inherit; opacity: 0.7; }
+.group-tab[aria-pressed="true"] { background: var(--tab-on-bg); border-color: var(--tab-on-bg); color: var(--tab-on-ink); }
+.group-tab[aria-pressed="true"] .n { color: inherit; opacity: 0.7; }
 
 .role-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; }
 .role-pills:empty { display: none; }
@@ -529,9 +538,18 @@ button { cursor: pointer; }
 /* ── 좁은 화면 ───────────────────────────────────── */
 @media (max-width: 720px) {
     .container { padding-inline: 16px; }
-    .updated { display: none; }
-    .icon-btn { margin-left: auto; }
-    .hero { padding-block: 32px 24px; }
+    .updated { font-size: 12px; }
+    .hero { padding-block: 28px 20px; }
+    .main { padding-block: 20px 48px; }
+    .spotlight { margin-bottom: 24px; }
+    .section-head { margin-bottom: 10px; }
+    .section-head h2 { font-size: 17px; }
+    .section-note, .carousel-pos { display: none; }
+    .company-strip { grid-auto-columns: 128px; gap: 8px; }
+    .company-card { padding: 12px; gap: 6px; border-radius: 14px; }
+    .company-card .logo { width: 34px; height: 34px; border-radius: 9px; }
+    .company-card-name { font-size: 14px; }
+    .company-card-meta { font-size: 12px; }
     .hero-title { font-size: 26px; }
     .hero-sub { font-size: 14px; }
     .search input { height: 50px; font-size: 15px; }

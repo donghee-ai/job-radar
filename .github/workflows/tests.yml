@@ -10,6 +10,8 @@ jobs:
   pytest:
     runs-on: ubuntu-24.04  # ubuntu-latest는 2026-10-19부터 Ubuntu 26으로 바뀜 — Playwright 의존성이 검증된 버전에 고정
     timeout-minutes: 10
+    env:
+      REQUIRE_BROWSER_TESTS: "1"  # 브라우저가 없으면 화면 테스트를 건너뛰지 말고 실패시킨다
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
@@ -17,5 +19,11 @@ jobs:
           python-version: "3.11"
           cache: "pip"
       - run: pip install -r requirements.txt pytest
-      # 분류기 정확도(평가셋 기준선)도 여기서 같이 검사된다
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ hashFiles('requirements.txt') }}
+      - run: playwright install chromium --with-deps
+      # 분류기 정확도(평가셋 기준선)와 대시보드 화면 테스트(tests/test_dashboard.py)도 여기서 검사된다
       - run: python -m pytest -q tests

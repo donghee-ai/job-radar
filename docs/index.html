@@ -51,7 +51,7 @@
     </div>
 </section>
 
-<main class="container main">
+<main class="container main" hidden>
 
     <section class="spotlight" aria-labelledby="spotlight-title">
         <div class="section-head">
@@ -73,7 +73,7 @@
     </section>
 
     <section class="board" aria-label="채용공고">
-        <div class="group-tabs" id="group-tabs" role="tablist" aria-label="직군"></div>
+        <div class="group-tabs" id="group-tabs" role="group" aria-label="직군"></div>
         <div class="role-pills" id="role-pills" aria-label="직무"></div>
 
         <div class="filter-bar">
@@ -107,7 +107,7 @@
     <a href="https://github.com/donghee-ai/job-radar" target="_blank" rel="noopener noreferrer">GitHub</a>
 </footer>
 
-<div class="popover" id="popover" hidden></div>
+<div class="popover" id="popover" role="group" hidden></div>
 
 <script src="search.js"></script>
 <script src="app.js"></script>

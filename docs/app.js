@@ -37,7 +37,8 @@ const state = {
 };
 let data = { jobs: [], sources: {}, taxonomy: DEFAULT_TAXONOMY };
 let companyMeta = {};
-let today = '';
+let today = '';      // 실제 오늘(KST) — 상대 날짜·NEW·'이번 주'의 기준
+let dataDay = '';    // 데이터가 마지막으로 갱신된 날(KST) — 갱신 시각 표시에만 쓴다
 let shown = PAGE_SIZE;
 let filtered = [];
 let search = null;   // 현재 검색 결과 (JobSearch.run) — 검색어가 없으면 null
@@ -94,8 +95,10 @@ function monogram(company, cls = '') {
 function prepare(raw) {
     data = raw;
     data.taxonomy = raw.taxonomy || DEFAULT_TAXONOMY;
+    // 수집이 며칠 멈춰도 '오늘'·NEW가 과거에 머물지 않도록 기준은 보는 시점의 날짜다
+    today = kstDate(new Date());
     const updated = parseDate(raw.updated_at);
-    today = updated ? kstDate(updated) : kstDate(new Date());
+    dataDay = updated ? kstDate(updated) : '';
 
     companyMeta = {};
     for (const src of Object.values(raw.sources || {})) {
@@ -178,9 +181,14 @@ const activeCount = () =>
 // ── 렌더: 상단 ──────────────────────────────────────────────────────────
 function renderHero() {
     const updated = parseDate(data.updated_at);
-    $('updated').textContent = updated
-        ? `${updated.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: 'long', day: 'numeric', hour: 'numeric', minute: '2-digit' })} 업데이트`
-        : '';
+    const el = $('updated');
+    if (updated) {
+        const time = updated.toLocaleTimeString('ko-KR', { timeZone: 'Asia/Seoul', hour: '2-digit', minute: '2-digit', hour12: false });
+        el.textContent = `${relDate(dataDay)} ${time} 업데이트`;
+        el.title = `${updated.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' })} (KST)`;
+    } else {
+        el.textContent = '';
+    }
     const total = data.jobs.length;
     const fresh = data.jobs.filter(j => j._age < WEEK_DAYS).length;
     const kr = data.jobs.filter(j => j._regions.includes('한국')).length;
@@ -266,8 +274,8 @@ function renderGroups() {
     const groups = [...Object.keys(data.taxonomy.groups), '기타'];
     const all = data.jobs.filter(j => matches(j, 'group')).length;
     $('group-tabs').innerHTML =
-        `<button type="button" class="group-tab" role="tab" data-group="" aria-selected="${!state.group}">전체 <span class="n">${all.toLocaleString()}</span></button>` +
-        groups.map(g => `<button type="button" class="group-tab" role="tab" data-group="${esc(g)}" aria-selected="${state.group === g}">${esc(g)} <span class="n">${(gc[g] || 0).toLocaleString()}</span></button>`).join('');
+        `<button type="button" class="group-tab" data-group="" aria-pressed="${!state.group}">전체 <span class="n">${all.toLocaleString()}</span></button>` +
+        groups.map(g => `<button type="button" class="group-tab" data-group="${esc(g)}" aria-pressed="${state.group === g}">${esc(g)} <span class="n">${(gc[g] || 0).toLocaleString()}</span></button>`).join('');
     $('group-tabs').querySelectorAll('.group-tab').forEach(el => {
         el.onclick = () => { state.group = el.dataset.group; state.role = ''; update(); };
     });
@@ -294,7 +302,7 @@ const MENUS = {
 function renderChips() {
     const chips = Object.entries(MENUS).map(([key, m]) => {
         const on = !!state[key];
-        return `<button type="button" class="chip ${on ? 'is-on' : ''}" data-menu="${key}" aria-haspopup="true">${esc(on ? state[key] : m.label)}${CARET}</button>`;
+        return `<button type="button" class="chip ${on ? 'is-on' : ''}" data-menu="${key}" aria-haspopup="true" aria-expanded="false" aria-controls="popover">${esc(on ? state[key] : m.label)}${CARET}</button>`;
     });
     chips.push('<span class="chip-sep" aria-hidden="true"></span>');
     chips.push(`<button type="button" class="chip ${state.kr ? 'is-on' : ''}" data-toggle="kr" aria-pressed="${state.kr}">한국 근무</button>`);
@@ -332,7 +340,7 @@ function menuItems(key) {
 function openMenu(chip) {
     const pop = $('popover');
     const key = chip.dataset.menu;
-    if (!pop.hidden && pop.dataset.key === key) return closeMenu();
+    if (!pop.hidden && pop.dataset.key === key) return closeMenu(true);
     const sections = menuItems(key);
     let html = `<button type="button" class="pop-item" data-v="" aria-pressed="${!state[key]}"><span class="label">${MENUS[key].all}</span></button>`;
     for (const s of sections) {
@@ -342,16 +350,46 @@ function openMenu(chip) {
     }
     pop.innerHTML = html;
     pop.dataset.key = key;
+    pop.setAttribute('aria-label', `${MENUS[key].label} 선택`);
     pop.hidden = false;
+    chip.setAttribute('aria-expanded', 'true');
     const r = chip.getBoundingClientRect();
     const left = Math.min(r.left + scrollX, scrollX + document.documentElement.clientWidth - pop.offsetWidth - 16);
     pop.style.left = `${Math.max(16, left)}px`;
     pop.style.top = `${r.bottom + scrollY + 6}px`;
     pop.querySelectorAll('.pop-item').forEach(b => {
-        b.onclick = () => { state[key] = b.dataset.v; closeMenu(); update(); };
+        b.onclick = () => { state[key] = b.dataset.v; closeMenu(); update(); focusChip(key); };
     });
+    // 지금 선택된 항목(없으면 첫 항목)으로 포커스를 옮겨 키보드로 바로 고를 수 있게
+    (pop.querySelector('.pop-item[aria-pressed="true"]') || pop.querySelector('.pop-item')).focus();
 }
-function closeMenu() { $('popover').hidden = true; }
+function focusChip(key) {
+    const chip = document.querySelector(`#filter-chips [data-menu="${key}"]`);
+    if (chip) chip.focus();
+}
+function closeMenu(returnFocus = false) {
+    const pop = $('popover');
+    if (pop.hidden) return;
+    pop.hidden = true;
+    const key = pop.dataset.key;
+    const chip = document.querySelector(`#filter-chips [data-menu="${key}"]`);
+    if (chip) chip.setAttribute('aria-expanded', 'false');
+    if (returnFocus) focusChip(key);
+}
+function onMenuKey(e) {
+    const items = [...$('popover').querySelectorAll('.pop-item')];
+    const i = items.indexOf(document.activeElement);
+    const move = { ArrowDown: i + 1, ArrowUp: i - 1, Home: 0, End: items.length - 1 }[e.key];
+    if (move !== undefined) {
+        e.preventDefault();
+        items[(move + items.length) % items.length].focus();
+    } else if (e.key === 'Escape' || e.key === 'Tab') {
+        // 메뉴는 문서 끝에 붙어 있어 Tab이 엉뚱한 곳으로 가므로, 닫고 칩으로 돌아간다
+        e.preventDefault();
+        e.stopPropagation();
+        closeMenu(true);
+    }
+}
 
 // ── 렌더: 공고 목록 ─────────────────────────────────────────────────────
 function jobRow(j) {
@@ -368,7 +406,7 @@ function jobRow(j) {
         <span class="job-main">
             <span class="job-company">${esc(j.company)}${isNew ? '<span class="badge-new">NEW</span>' : ''}${j.pool ? '<span class="badge-pool" title="특정 자리가 아닌 인재풀·상시 지원">인재풀</span>' : ''}</span>
             <span class="job-title">${search ? highlight(j.title, search.hits.get(j) || []) : esc(j.title)}</span>
-            <span class="job-meta"><span class="tag-inline">${esc(j.role || '기타')} · </span>${meta}</span>
+            <span class="job-meta"><span class="tag-inline">${esc(j.role || '기타')}${j._when ? ` · ${relDate(j._when)}` : ''} · </span>${meta}</span>
         </span>
         <span class="job-side">
             <span class="tag ${tagCls}">${esc(j.role || '기타')}</span>
@@ -409,7 +447,23 @@ function writeUrl() {
     history.replaceState(null, '', qs ? `?${qs}` : location.pathname);
 }
 
+// 필터 버튼은 매번 다시 그려지므로, 누르기 전 포커스가 있던 버튼을 다시 찾아 돌려놓는다
+const FOCUS_KEYS = ['data-group', 'data-role', 'data-menu', 'data-toggle', 'data-sort'];
+function focusSelector(el) {
+    if (!el || el === document.body) return null;
+    const box = el.closest('#group-tabs, #role-pills, #filter-chips, #sort');
+    const attr = box && FOCUS_KEYS.find(a => el.hasAttribute(a));
+    return attr ? `#${box.id} [${attr}="${CSS.escape(el.getAttribute(attr))}"]` : null;
+}
+function restoreFocus(sel) {
+    if (!sel) return;
+    // 직무 알약이 사라진 경우(직군 해제) 등에는 선택된 직군 탭으로
+    const target = document.querySelector(sel) || document.querySelector('#group-tabs [aria-pressed="true"]');
+    if (target) target.focus();
+}
+
 function update() {
+    const keep = focusSelector(document.activeElement);
     shown = PAGE_SIZE;
     search = state.q ? JobSearch.run(data.jobs, state.q) : null;
     if (!state.q && state.sort === 'relevance') state.sort = 'recent';
@@ -420,6 +474,7 @@ function update() {
     renderChips();
     renderList();
     writeUrl();
+    restoreFocus(keep);
 }
 function resetFilters() {
     Object.assign(state, { q: '', group: '', role: '', company: '', sector: '', level: '', region: '', kr: false, fresh: false });
@@ -459,6 +514,7 @@ function bind() {
     $('reset').onclick = resetFilters;
     $('empty-reset').onclick = resetFilters;
     document.addEventListener('click', e => { if (!$('popover').contains(e.target)) closeMenu(); });
+    $('popover').addEventListener('keydown', onMenuKey);
     document.addEventListener('keydown', e => {
         if (e.key === 'Escape') {
             closeMenu();
@@ -476,22 +532,31 @@ function bind() {
     }, true);
 }
 
-async function load() {
-    initTheme();
-    bind();
+let carouselReady = false;
+
+async function loadData() {
+    $('hero-title').textContent = '채용공고를 불러오는 중이에요';
+    $('hero-sub').textContent = '';
     try {
         const res = await fetch('data/jobs.json?t=' + Date.now());
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         prepare(await res.json());
+        document.querySelector('main').hidden = false;
         readUrl();
         renderCompanyStrip();
-        initCarousel();
+        if (!carouselReady) { initCarousel(); carouselReady = true; }
         update();
     } catch (e) {
-        $('hero-title').textContent = '데이터를 불러오지 못했어요';
-        $('hero-sub').textContent = 'jobs.json이 없거나 손상됐어요. python main.py 로 한 번 수집해 주세요.';
+        // 방문자에게는 원인 대신 할 수 있는 일만 — 원인은 개발자 도구 콘솔에
+        document.querySelector('main').hidden = true;
+        $('hero-title').textContent = '공고 정보를 불러오지 못했어요';
+        $('hero-sub').innerHTML = '일시적인 문제일 수 있어요. 잠시 후 다시 시도해 주세요. '
+            + '<button type="button" class="retry" id="retry">다시 시도</button>';
+        $('retry').onclick = loadData;
         console.error(e);
     }
 }
 
-load();
+initTheme();
+bind();
+loadData();
