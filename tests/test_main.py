@@ -133,6 +133,7 @@ class TestFailureReasons:
     """안 되는 날에는 왜 안 되는지가 데이터·로그·GitHub 화면에 남아야 한다"""
 
     def _run(self, tmp_path, monkeypatch, crawler, prev_jobs=0, env=None):
+        """반환: (jobs.json의 회사 상태, 실패 목록, CI 보고서 본문)"""
         import json
         import main
         out = tmp_path / "jobs.json"
@@ -143,10 +144,13 @@ class TestFailureReasons:
         monkeypatch.setattr(main, "OUTPUT_PATH", out)
         monkeypatch.setattr(main, "CONFIG_PATH", cfg)
         monkeypatch.setattr(main, "get_all_crawlers", lambda: {"X": crawler})
+        report = tmp_path / "report.md"
+        monkeypatch.setenv("CRAWL_REPORT_PATH", str(report))
         for k, v in (env or {}).items():
             monkeypatch.setenv(k, v)
         degraded = main.run()
-        return json.loads(out.read_text(encoding="utf-8"))["sources"]["X"], degraded
+        src = json.loads(out.read_text(encoding="utf-8"))["sources"]["X"]
+        return src, degraded, report.read_text(encoding="utf-8")
 
     @staticmethod
     def _crawler(fetch):
@@ -165,25 +169,33 @@ class TestFailureReasons:
         def fetch(c):
             c.warn("요청 실패(3회 시도): HTTP 429 요청 과다(rate limit) — https://x")
             return []
-        src, degraded = self._run(tmp_path, monkeypatch, self._crawler(fetch))
-        assert src["status"] == "failed" and "HTTP 429" in src["error"]
+        src, degraded, report = self._run(tmp_path, monkeypatch, self._crawler(fetch))
+        assert src["status"] == "failed" and "HTTP 429" in report
         assert degraded == ["X"]
+
+    def test_reason_not_in_public_data(self, tmp_path, monkeypatch):
+        # 실패 원인은 운영 로그 — 방문자에게 공개되는 jobs.json에는 남기지 않는다
+        def fetch(c):
+            c.warn("요청 실패: HTTP 503 — https://internal")
+            return []
+        src, _, report = self._run(tmp_path, monkeypatch, self._crawler(fetch), prev_jobs=3)
+        assert "error" not in src and "503" not in str(src) and "503" in report
 
     def test_exception_becomes_error(self, tmp_path, monkeypatch):
         def fetch(c):
             raise KeyError("positions")
-        src, _ = self._run(tmp_path, monkeypatch, self._crawler(fetch), prev_jobs=3)
-        assert src["status"] == "stale" and "KeyError" in src["error"]
+        src, _, report = self._run(tmp_path, monkeypatch, self._crawler(fetch), prev_jobs=3)
+        assert src["status"] == "stale" and "KeyError" in report
 
     def test_silent_zero_is_named(self, tmp_path, monkeypatch):
-        src, _ = self._run(tmp_path, monkeypatch, self._crawler(lambda c: []), prev_jobs=3)
-        assert "오류 없이 0건" in src["error"]
+        _, _, report = self._run(tmp_path, monkeypatch, self._crawler(lambda c: []), prev_jobs=3)
+        assert "오류 없이 0건" in report
 
     def test_sharp_drop_warns(self, tmp_path, monkeypatch):
         def fetch(c):
             return [c.format_job("Software Engineer", f"n{i}") for i in range(3)]
-        src, degraded = self._run(tmp_path, monkeypatch, self._crawler(fetch), prev_jobs=20)
-        assert src["status"] == "ok" and "급감" in src["warning"] and degraded == []
+        src, degraded, report = self._run(tmp_path, monkeypatch, self._crawler(fetch), prev_jobs=20)
+        assert src["status"] == "ok" and "급감" in report and degraded == []
 
     def test_github_annotation_and_summary(self, tmp_path, monkeypatch, capsys):
         summary = tmp_path / "summary.md"
@@ -196,3 +208,9 @@ class TestFailureReasons:
         out = capsys.readouterr().out
         assert "::error title=X" in out and "Sorry" in out
         assert "| X | ❌ 실패 · 이전 공고 유지 | 3 |" in summary.read_text(encoding="utf-8")
+
+    def test_all_ok_report(self, tmp_path, monkeypatch):
+        def fetch(c):
+            return [c.format_job("Software Engineer", "u0")]
+        src, degraded, report = self._run(tmp_path, monkeypatch, self._crawler(fetch), prev_jobs=1)
+        assert degraded == [] and "문제 0곳" in report

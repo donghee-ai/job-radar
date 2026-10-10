@@ -35,7 +35,7 @@ job-radar/
 │   ├── base.py                # BaseCrawler: HTTP/Playwright helpers, warn(), format_job()
 │   ├── classifier.py          # Role classifier (weighted title rules) + eval CLI
 │   ├── enrich.py              # Post-processing: role, seniority, employment, pool, regions, first_seen
-│   ├── google.py              # Google — Playwright + JS evaluate
+│   ├── google.py              # Google — Requests + BeautifulSoup (server-rendered cards)
 │   ├── nvidia.py              # NVIDIA — Playwright XHR interception (Workday)
 │   ├── samsung.py             # Samsung — Playwright + conditional waits
 │   ├── naver.py               # Naver — internal AJAX API
@@ -91,8 +91,8 @@ job-radar/
      ┌───────────────┬───────┴────────┬───────────────────┐
      ▼               ▼                ▼                   ▼
  ATS REST APIs   Direct JSON APIs   Requests + BS4     Playwright
- Greenhouse,     Workday, Qualcomm, Upstage            Google, NVIDIA,
- Ashby, Lever    AMD, MediaTek,     (Naver: AJAX)      Toss, Samsung
+ Greenhouse,     Workday, Qualcomm, Google, Upstage    NVIDIA, Toss,
+ Ashby, Lever    AMD, MediaTek,     (Naver: AJAX)      Samsung
                  LG, SK
                              │
                              ▼
@@ -159,7 +159,7 @@ Large chip vendors list thousands of global openings, so only Korea-based postin
 
 ### 4-3. Requests + BeautifulSoup (SSR scraping)
 
-**Used by**: Upstage, Naver
+**Used by**: Google, Upstage, Naver
 
 Parses fully server-rendered HTML statically. Naver calls its internal AJAX API (`/rcrt/loadJobList.do`) directly to paginate as JSON.
 
@@ -172,6 +172,13 @@ requests.get(ajax_api?firstIndex=N)
   → parse JSON → iterate pages
 ```
 
+**Google** sends its job cards in the HTML (`li[ssk]` with an `h3` title, a relative `jobs/results/{id}-{slug}` link,
+the location next to the `place` icon and an Early / Mid / Advanced level). Pages are fetched with `&page=N` until no
+new cards appear; the `page` parameter is stripped from job URLs so `first_seen` stays continuous. This replaced a
+Playwright crawler that waited for `a[href*="/jobs/results/"]` as its "rendered" signal: job links are relative
+(`jobs/results/…`, no leading slash) and never matched it, so the crawler only worked on days when some unrelated
+link happened to match, and returned 0 otherwise (2026-10-07, 10-08, 10-10).
+
 Upstage (Greeting HR) cards hold the title, team, experience and employment type in separate elements (`data-variant="title-01"`, `data-testid="공고리스트_subtext_*"`); they are extracted separately rather than reading the whole card text, which would glue them together.
 
 | Pros                                  | Cons                                       |
@@ -183,7 +190,7 @@ Upstage (Greeting HR) cards hold the title, team, experience and employment type
 
 ### 4-4. Playwright + HTML/JS parsing (CSR/SPA rendering)
 
-**Used by**: Google, Samsung, Toss
+**Used by**: Samsung, Toss
 
 Runs a real headless Chromium browser, waits for JS rendering, then parses the DOM.
 
@@ -194,9 +201,6 @@ launch Playwright Chromium
   → page.evaluate()   ← walk the DOM in JS context
     or parse HTML with BeautifulSoup
 ```
-
-**Why `page.evaluate()` for Google**
-A CSS selector like `a[href*="..."]` matches the literal `href` attribute, but most Google job links are stored as absolute URLs, so only one element matches. The `a.href` property always returns a full URL, so the JS-context evaluation collects them all. Titles come from each card's `h3` (the URL slug loses punctuation and casing), and the card's experience level (Early / Mid / Advanced) is kept as a tag.
 
 **Toss** cards contain the title, tech tags and affiliate badges; each is read from its own element (`[data-desktop-list-item-title]`, the following tag span, the right-side badges).
 
@@ -303,7 +307,7 @@ python -m crawlers.classifier "Backend Engineer" # classify ad-hoc titles
 | LG전자    | LG Careers JSON POST      | One call                            | Drops past `recEndDateTime` | companyCode LGE, RBO (로보스타)                     |
 | SK하이닉스 | SK Careers form POST     | One call                            | Drops past `end`        | SK hynix, SK telecom only                              |
 | Naver     | Internal AJAX JSON API    | `firstIndex` parameter              | Drops `endYmd < today`  | Total pages computed from the `totalRows` JS variable  |
-| Google    | Playwright + JS evaluate  | `aria-label="Go to next page"` link | Listing shows open jobs | Clicks the cookie banner first; titles from card `h3`  |
+| Google    | Requests + BS4            | `&page=N` until no new cards        | Listing shows open jobs | Server-rendered `li[ssk]` cards; titles from `h3`      |
 | NVIDIA    | Playwright XHR intercept  | None (initial load only)            | Open jobs only          | Workday internal API                                   |
 | Samsung   | Playwright + BS4          | None                                | Listing shows open jobs | Waits on `ul.job#list li a[data-value]`; 0 results is normal off-cycle |
 | Toss      | Playwright + BS4          | None                                | Listing shows open jobs | Title / tags / affiliates read separately              |
@@ -325,8 +329,7 @@ Each run replaces a company's postings wholesale, so a posting that closes disap
   "sources": {
     "Google": {
       "company": "Google", "category": "외국계", "sectors": ["AI 연구소"],
-      "count": 20, "status": "stale", "last_success": "2026-10-06", "stale_since": "2026-10-07",
-      "error": "공고 링크가 안 보임 — 받은 페이지: 제목 '…'", "warning": ""
+      "count": 20, "status": "stale", "last_success": "2026-10-06", "stale_since": "2026-10-07"
     }
   },
   "taxonomy": { "groups": { "엔지니어링": ["AI / ML", "..."] }, "levels": ["인턴", "..."], "regions": ["한국", "..."] },
@@ -338,10 +341,8 @@ Each run replaces a company's postings wholesale, so a posting that closes disap
 | ------------------ | ------- |
 | `status` | `ok` · `stale` (0 results, previous postings kept) · `failed` (0 results and nothing kept: new company, or failing for 7+ days) |
 | `last_success` / `stale_since` | KST dates of the last good crawl and the start of the current failure streak |
-| `error` | Human-readable reason when not `ok` (see [Failure reporting](#failure-reporting)) |
-| `warning` | Set on a sharp drop (more than 50% fewer postings than last time) |
 
-After 7 days of continuous failure (`STALE_MAX_DAYS`) a `stale` company becomes `failed` and its postings are dropped, so closed jobs don't linger. `taxonomy` lets the dashboard render filters without hard-coding role names.
+After 7 days of continuous failure (`STALE_MAX_DAYS`) a `stale` company becomes `failed` and its postings are dropped, so closed jobs don't linger. Failure *reasons* are deliberately not in this public file; they go to GitHub (see [Failure reporting](#failure-reporting)). `taxonomy` lets the dashboard render filters without hard-coding role names.
 
 ### Single job object
 
@@ -451,6 +452,7 @@ Daily at 19:07 UTC (04:07 KST next day), or manually (workflow_dispatch)
       python main.py
       git add -f docs/data/jobs.json config.json
       git commit & pull --rebase & push   (always, even if some crawlers failed)
+      open / comment on / close the crawl-failure issue
 ```
 
 **Key settings**
@@ -475,16 +477,20 @@ classification fails CI. Date logic is tested against KST, so the suite passes r
 
 ### Failure reporting
 
-When a company comes back empty, the run says *why* in three places:
+Failures are operational logs, so they live on GitHub, not on the public dashboard or in `jobs.json`.
+When a company comes back empty (or drops by more than half), the run records *why*: an HTTP status with a hint
+such as "429 요청 과다(rate limit)", a browser load error, "page loaded but no job cards" with the page title, a
+crawler exception, or "0 with no error recorded". It shows up in:
 
-- **Data / dashboard**: `sources[name].error` holds the reason: an HTTP status with a hint such as
-  "429 요청 과다(rate limit)", a browser load error, "page loaded but no job links" with the page title and the start of
-  the body, a crawler exception, or "0 with no error recorded". The dashboard's warning banner shows it.
-- **Console**: a "수집 문제 요약" list at the end of every run, including sharp drops (more than 50% fewer postings than last time).
-- **GitHub Actions**: `::error` / `::warning` annotations at the top of the run page, plus a per-company status
-  table in the job summary.
+- **The run page**: `::error` / `::warning` annotations at the top, plus a per-company status table
+  (status, count, last success, reason) in the job summary.
+- **A `crawl-failure` issue**: the last workflow step opens one when the crawl fails, adds a comment with the
+  new report if it is still failing the next day, and closes it with a link to the run once every company
+  succeeds again. Opening the issue triggers a GitHub notification.
+- **The console**: a "수집 문제 요약" list at the end of every local run.
 
-Crawlers report problems through `BaseCrawler.warn()` rather than `print`, so a failure is never silent.
+`main.py` writes the report to `CRAWL_REPORT_PATH` (set by the workflow, gitignored). Crawlers report problems
+through `BaseCrawler.warn()` rather than `print`, so a failure is never silent.
 
 ---
 

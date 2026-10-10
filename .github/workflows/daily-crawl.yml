@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  issues: write  # 수집 실패 시 이슈를 열고, 복구되면 닫는다
 
 concurrency:
   group: crawl
@@ -16,6 +17,8 @@ jobs:
   crawl:
     runs-on: ubuntu-24.04  # ubuntu-latest는 2026-10-19부터 Ubuntu 26으로 바뀜 — Playwright 의존성이 검증된 버전에 고정
     timeout-minutes: 60
+    env:
+      CRAWL_REPORT_PATH: crawl-report.md  # main.py가 회사별 상태·실패 원인을 쓴다 (.gitignore, 커밋 안 됨)
     steps:
       - uses: actions/checkout@v7
         with:
@@ -50,11 +53,12 @@ jobs:
         run: playwright install chromium --with-deps
 
       - name: Run crawler
+        id: crawl
         if: steps.check.outputs.enabled == 'True'
         run: python main.py
 
       # 일부 크롤러가 실패해도(main.py 종료코드 1) 수집된 데이터는 반영한다.
-      # 실패 사실은 'Run crawler' 스텝이 빨간불로 남아 알림으로 전달된다.
+      # 실패 원인은 이 실행 화면(상단 오류 표시·요약 표)과 아래 이슈에 남는다.
       - name: Commit and push results
         if: always() && steps.check.outputs.enabled == 'True'
         run: |
@@ -66,3 +70,32 @@ jobs:
           # 그날 수집분이 통째로 유실된다.
           git pull --rebase origin main
           git push
+
+      # 실패 이력은 대시보드가 아니라 이슈로: 실패하면 열고(이어지면 댓글로 쌓고), 복구되면 닫는다.
+      # 이슈가 열리면 GitHub 알림(메일)이 간다.
+      - name: Track failures in an issue
+        if: always() && steps.check.outputs.enabled == 'True'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          OUTCOME: ${{ steps.crawl.outcome }}
+        run: |
+          LABEL="crawl-failure"
+          gh label create "$LABEL" --color B60205 --description "자동 수집 실패" 2>/dev/null || true
+          ISSUE=$(gh issue list --label "$LABEL" --state open --json number --jq '.[0].number // empty')
+          BODY="$RUNNER_TEMP/issue-body.md"
+          {
+            echo "실행 기록: $RUN_URL"
+            echo
+            if [ -f "$CRAWL_REPORT_PATH" ]; then cat "$CRAWL_REPORT_PATH"
+            else echo "크롤 스크립트가 보고서를 남기기 전에 종료됨 — 실행 기록의 로그를 확인하세요."; fi
+          } > "$BODY"
+          if [ "$OUTCOME" = "failure" ]; then
+            if [ -n "$ISSUE" ]; then
+              gh issue comment "$ISSUE" --body-file "$BODY"
+            else
+              gh issue create --title "채용공고 자동 수집 실패" --label "$LABEL" --body-file "$BODY"
+            fi
+          elif [ -n "$ISSUE" ]; then
+            gh issue close "$ISSUE" --comment "모든 회사 정상 수집으로 복구됨 — $RUN_URL"
+          fi

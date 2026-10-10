@@ -21,9 +21,9 @@ Tired of checking multiple career pages every week, I built a unified dashboard 
 - **Multi-source crawling** — Greenhouse, Ashby, Lever, Workday, Eightfold, Jibe, and custom JSON APIs
 - **Role classification** — 16 roles in 4 families via weighted title rules (see [Role Classification](ARCHITECTURE.md#5-role-classification)); 87% on a held-out sample vs 66% for the previous keyword list
 - **Seniority, region, new-posting tracking** — every posting gets a level (intern → lead), work regions, and the date it was first seen
-- **Dashboard** — Korean job-board style (search hero, company logos, role-family tabs, dropdown filter chips with live counts), "Korea-based" / "new this week" toggles, sector filter (physical AI / on-device AI / AI labs), shareable URLs, dark mode, stale-data warnings
+- **Dashboard** — Korean job-board style (search hero, company logos, role-family tabs, dropdown filter chips with live counts), "Korea-based" / "new this week" toggles, sector filter (physical AI / on-device AI / AI labs), shareable URLs, dark mode
 - **Related search** — Korean/English synonyms ("백엔드" also finds Backend, Server), related tech as weaker matches, one-letter typo tolerance, relevance ranking with highlighted matches (`docs/search.js`)
-- **Self-healing daily runs** — a crawler that suddenly returns 0 keeps its previous postings for up to 7 days (then drops them so closed jobs don't linger), and every failure is reported with its cause on the dashboard, in the run log, and on the GitHub Actions run page
+- **Self-healing daily runs** — a crawler that suddenly returns 0 keeps its previous postings for up to 7 days (then drops them so closed jobs don't linger). Failures are reported with their cause on the GitHub Actions run page and in an auto-managed `crawl-failure` issue (opened on failure, closed on recovery), not on the public dashboard
 - **Zero-cost deployment** — static site + GitHub Actions
 
 ## Supported Companies
@@ -34,7 +34,7 @@ Each company uses a crawling strategy chosen to fit how its career page is built
 | ------- | -------- | ------ | --------------- | ----- |
 | Anthropic | Global | AI lab | Greenhouse REST API | All |
 | OpenAI | Global | AI lab | Ashby REST API | All |
-| Google | Global | AI lab | Playwright + JS `evaluate()` | Korea |
+| Google | Global | AI lab | Requests + BeautifulSoup (server-rendered cards) | Korea |
 | NVIDIA | Global | Physical / on-device | Playwright XHR interception (Workday) | Korea |
 | Naver | IT | — | Internal AJAX JSON API | All |
 | Samsung | Manufacturing | On-device | Playwright + BeautifulSoup | All |
@@ -80,7 +80,7 @@ venv\Scripts\activate
 pip install -r requirements.txt
 
 # 4. Install Playwright browser binaries
-#    (pip install alone is not enough — skipping this step breaks the Google/Samsung/Toss/NVIDIA crawlers)
+#    (pip install alone is not enough — skipping this step breaks the Samsung/Toss/NVIDIA crawlers)
 playwright install chromium
 ```
 

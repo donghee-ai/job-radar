@@ -101,7 +101,7 @@ function prepare(raw) {
     for (const src of Object.values(raw.sources || {})) {
         companyMeta[src.company] = {
             category: src.category || '', sectors: src.sectors || [],
-            status: src.status || 'ok', last_success: src.last_success || '', error: src.error || '',
+            status: src.status || 'ok', last_success: src.last_success || '',
         };
     }
     for (const j of raw.jobs) {
@@ -187,16 +187,6 @@ function renderHero() {
     const companies = Object.keys(companyMeta).length;
     $('hero-title').innerHTML = `<em>${total.toLocaleString()}개</em>의 포지션이 열려 있어요`;
     $('hero-sub').innerHTML = `${companies}개 회사 · 이번 주 새 공고 <b>${fresh.toLocaleString()}</b> · 한국 근무 <b>${kr.toLocaleString()}</b>`;
-
-    const broken = Object.entries(companyMeta).filter(([, m]) => m.status === 'stale' || m.status === 'failed');
-    $('alerts').innerHTML = broken.map(([name, m]) => {
-        const since = m.last_success ? `${relDate(m.last_success)}부터` : '최근';
-        const tail = m.status === 'failed'
-            ? '닫힌 공고가 섞이지 않도록 이 회사 공고는 잠시 내려 두었어요.'
-            : '마지막으로 받은 공고를 보여 드리고 있어요.';
-        const why = m.error ? `<span class="alert-why">원인: ${esc(m.error)}</span>` : '';
-        return `<p class="alert"><span>${esc(name)} 공고가 ${since} 새로 수집되지 않고 있어요. ${tail}</span>${why}</p>`;
-    }).join('');
 }
 
 function renderCompanyStrip() {

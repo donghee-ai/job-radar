@@ -160,8 +160,6 @@ def run(targets=None, force_all=False):
             "status": status,
             "last_success": last_ok,
             "stale_since": stale_since,
-            "error": error,
-            "warning": warning,
         }
 
     # 분류·연차·지역·최초 수집일은 여기서 한 번에 붙인다 (유지된 이전 데이터도 새 규칙으로 재분류)
@@ -201,8 +199,9 @@ STATUS_LABEL = {"stale": "실패 (이전 공고 유지)", "failed": "실패 (공
 
 
 def report_problems(problems, sources):
-    """실패 원인을 한곳에 모아 보여 준다.
-    로컬: 콘솔 표 / GitHub Actions: 실행 화면 상단 오류 표시(::error)와 요약 표(STEP_SUMMARY)."""
+    """실패 원인을 운영 쪽에 남긴다 — 방문자가 보는 대시보드·공개 데이터에는 넣지 않는다.
+    로컬: 콘솔 / GitHub Actions: 실행 화면 상단 오류 표시(::error), 요약 표(STEP_SUMMARY),
+    보고서 파일(CRAWL_REPORT_PATH) — 워크플로가 이 파일로 실패 이슈를 열거나 댓글을 단다."""
     if not problems:
         print("✅ 모든 회사 정상 수집\n")
     else:
@@ -218,18 +217,28 @@ def report_problems(problems, sources):
             msg = why.replace("\n", " ").replace("%", "%25")
             print(f"::{level} title={name} {STATUS_LABEL[status]}::{msg}")
 
-    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-    if summary_path:
-        lines = ["## 채용공고 수집 결과", "",
-                 "| 회사 | 상태 | 건수 | 원인 |", "| --- | --- | ---: | --- |"]
-        flagged = {n: (s, w) for n, s, w in problems}
-        for name, src in sources.items():
-            status, why = flagged.get(name, ("ok", ""))
-            label = {"ok": "✅ 정상", "warning": "⚠️ 급감", "stale": "❌ 실패 · 이전 공고 유지",
-                     "failed": "❌ 실패"}[status]
-            lines.append(f"| {name} | {label} | {src['count']} | {why.replace('|', '/')} |")
-        with open(summary_path, "a", encoding="utf-8") as f:
-            f.write("\n".join(lines) + "\n")
+    report = build_report(problems, sources)
+    for env in ("GITHUB_STEP_SUMMARY", "CRAWL_REPORT_PATH"):
+        path = os.environ.get(env)
+        if path:
+            with open(path, "a" if env == "GITHUB_STEP_SUMMARY" else "w", encoding="utf-8") as f:
+                f.write(report)
+
+
+def build_report(problems, sources) -> str:
+    """회사별 상태 표(마크다운). 문제 있는 회사를 위로."""
+    flagged = {n: (s, w) for n, s, w in problems}
+    label = {"ok": "✅ 정상", "warning": "⚠️ 급감", "stale": "❌ 실패 · 이전 공고 유지", "failed": "❌ 실패"}
+    names = sorted(sources, key=lambda n: (flagged.get(n, ("ok",))[0] == "ok", n))
+    lines = [f"## 채용공고 수집 결과 ({now_kst():%Y-%m-%d %H:%M} KST)", "",
+             f"문제 {len(problems)}곳 / 전체 {len(sources)}곳", "",
+             "| 회사 | 상태 | 건수 | 마지막 성공 | 원인 |", "| --- | --- | ---: | --- | --- |"]
+    for name in names:
+        src = sources[name]
+        status, why = flagged.get(name, ("ok", ""))
+        lines.append(f"| {name} | {label[status]} | {src['count']} | {src.get('last_success', '')} "
+                     f"| {why.replace('|', '/')} |")
+    return "\n".join(lines) + "\n"
 
 
 def reclassify():

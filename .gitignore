@@ -19,3 +19,6 @@ __pycache__/
 # 가상환경
 venv/
 .venv/
+
+# 크롤 실패 보고서 (CI가 이슈로 올림)
+crawl-report.md
