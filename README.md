@@ -109,6 +109,9 @@ python -m pytest tests
 
 # Open the local dashboard
 python server.py
+
+# After editing docs/*.css or docs/*.js: refresh the cache-busting versions in index.html
+python scripts/stamp_assets.py
 ```
 
 ### GitHub Pages Live Demo Setup (Optional)

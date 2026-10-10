@@ -61,6 +61,7 @@ job-radar/
 ├── .github/workflows/
 │   ├── daily-crawl.yml        # Daily crawl at 04:07 KST, commits jobs.json
 │   └── tests.yml              # pytest on push / PR
+├── scripts/stamp_assets.py    # Cache-busting versions for docs/ assets
 ├── main.py                    # Crawl entry point (+ --reclassify)
 ├── server.py                  # Local dev server (http://localhost:8000)
 ├── toggle_schedule.py         # Toggle the daily schedule on/off
@@ -420,6 +421,13 @@ browser console only.
 **Constraints**: the page sets a strict CSP (`script-src 'self'`, `img-src 'self' data:`, fonts and the
 Pretendard stylesheet only from `cdn.jsdelivr.net`). Logos are therefore stored in `docs/logos/`, and colors that
 depend on data use CSS classes instead of inline `style` attributes, which the CSP blocks.
+
+**Cache safety**: GitHub Pages caches files for 10 minutes (`max-age=600`). `index.html` references assets with a
+content hash (`app.js?v=5a6f5c3b`), so a changed file always gets a new URL and a browser can't mix a new
+`index.html` with a cached old `app.js`. After editing `docs/style.css`, `search.js` or `app.js`, run
+`python scripts/stamp_assets.py`; `tests/test_site.py` fails if you forget. The page content is also never hidden in
+the HTML itself (only the load-failure path hides it from JS), so even a mismatched script can't blank the page —
+which is exactly what happened on 2026-10-10.
 
 **Logos**: official current logos (company sites / Wikimedia Commons), rendered to PNG. A company without a
 file falls back to a colored initial badge. To add one, put the PNG in `docs/logos/` and map it in `LOGOS`
