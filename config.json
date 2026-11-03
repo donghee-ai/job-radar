@@ -2,7 +2,7 @@
   "schedule": {
     "enabled": true,
     "interval": "daily",
-    "last_updated": "2026-11-01T22:46:03.040269+00:00"
+    "last_updated": "2026-11-03T01:32:51.891616+00:00"
   },
   "crawlers": {
     "NVIDIA": true,
